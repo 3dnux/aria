@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:orientation="horizontal"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/widget_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="#FFD9A066"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:text="🍪 Cookie" />
+
+        <TextView
+            android:id="@+id/widget_body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:maxLines="3"
+            android:textColor="#FFF1E9E1"
+            android:textSize="13sp"
+            android:text="…" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/widget_mic"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="center_vertical"
+        android:background="@drawable/widget_mic_bg"
+        android:contentDescription="Hablar con tu copia"
+        android:padding="10dp"
+        android:src="@drawable/ic_mic" />
+</LinearLayout>

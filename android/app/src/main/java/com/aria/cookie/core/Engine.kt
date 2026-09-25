@@ -19,7 +19,34 @@ data class CookieState(
     var lastResearch: Long = 0,
     var lastBriefing: Long = 0,
     var lastError: String? = null,
+    // Memoria a largo plazo
+    val memories: MutableList<Memory> = mutableListOf(),
+    // Sentidos
+    val places: MutableList<Place> = mutableListOf(),
+    var currentPlaceId: String? = null,
+    val upcoming: MutableList<CalendarEvent> = mutableListOf(),
+    val calendarLearned: MutableList<String> = mutableListOf(),
+    val health: Health = Health(),
+    val apps: MutableMap<String, AppStat> = mutableMapOf(),
+    var lastUsageSync: Long = 0,
+    // Tu copia
+    val style: MutableList<StyleExample> = mutableListOf(),
+    val quiz: MutableList<QuizRound> = mutableListOf(),
+    val actions: MutableList<PendingAction> = mutableListOf(),
+    // Avisos ya dados (clave → cuándo)
+    val nudged: MutableMap<String, Long> = mutableMapOf(),
 )
+
+/** Cómo se guarda el estado en disco (permite cifrarlo). */
+interface Codec {
+    fun encode(text: String): ByteArray
+    fun decode(bytes: ByteArray): String
+}
+
+object PlainCodec : Codec {
+    override fun encode(text: String) = text.toByteArray()
+    override fun decode(bytes: ByteArray) = String(bytes)
+}
 
 private val signalWeights = mapOf("trabajo" to 3.0, "gusto" to 2.0, "actividad" to 1.0, "palabra" to 0.3)
 private const val MAX_INBOX = 200
@@ -33,22 +60,30 @@ private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; allow
  * Orquesta aprendizaje, investigación y resúmenes. Todo vive en un JSON
  * privado de la app; [wipe] lo borra por completo.
  */
-class Engine(private val file: File, private val now: () -> Long = System::currentTimeMillis) {
+class Engine(
+    private val file: File,
+    private val codec: Codec = PlainCodec,
+    private val now: () -> Long = System::currentTimeMillis,
+) {
     private val mutex = Mutex()
     private var state: CookieState = load()
     private val _flow = MutableStateFlow(snapshot())
     val flow: StateFlow<CookieState> = _flow
 
-    private fun load(): CookieState =
-        if (file.exists()) runCatching { json.decodeFromString<CookieState>(file.readText()) }.getOrElse { CookieState() }
-        else CookieState()
+    private fun load(): CookieState {
+        if (!file.exists()) return CookieState()
+        val bytes = file.readBytes()
+        // Acepta un archivo antiguo sin cifrar y lo cifra al guardar.
+        val text = runCatching { codec.decode(bytes) }.getOrElse { String(bytes) }
+        return runCatching { json.decodeFromString<CookieState>(text) }.getOrElse { CookieState() }
+    }
 
     private fun snapshot(): CookieState = json.decodeFromString(json.encodeToString(CookieState.serializer(), state))
 
     private fun save() {
         file.parentFile?.mkdirs()
         val tmp = File(file.path + ".tmp")
-        tmp.writeText(json.encodeToString(CookieState.serializer(), state))
+        tmp.writeBytes(codec.encode(json.encodeToString(CookieState.serializer(), state)))
         tmp.renameTo(file)
         _flow.value = snapshot()
     }
@@ -150,6 +185,72 @@ class Engine(private val file: File, private val now: () -> Long = System::curre
     suspend fun setError(e: String?) = edit { lastError = e }
 
     fun current(): CookieState = state
+
+    // ==================== MEMORIA ====================
+
+    suspend fun applyMemories(d: MemoryDigest) = edit { applyDigest(this, d, now()) }
+
+    suspend fun forgetMemory(id: String) = edit { memories.removeAll { it.id == id } }
+
+    fun relevantMemories(query: String, n: Int = 25) = state.memories.relevant(query, now(), n)
+
+    // ==================== SENTIDOS ====================
+
+    suspend fun observeLocation(lat: Double, lon: Double): PlaceObservation = edit {
+        val o = observeLocation(this, lat, lon, now())
+        o.copy(place = o.place.copy())
+    }
+
+    suspend fun renamePlace(id: String, label: String) = edit {
+        places.firstOrNull { it.id == id }?.let { it.label = normalizeTopic(label).ifEmpty { it.label }; it.custom = true }
+    }
+
+    suspend fun learnCalendar(events: List<CalendarEvent>) = edit { learnCalendar(this, events, now()) }
+
+    suspend fun learnHealth(nights: List<SleepNight>, stepsToday: Long?, stepsAvg: Long?) =
+        edit { learnSleep(this, nights, stepsToday, stepsAvg, now()) }
+
+    suspend fun learnApps(sessions: List<AppSession>) = edit { learnApps(this, sessions, now()) }
+
+    // ==================== TU COPIA ====================
+
+    suspend fun markApproved(at: Long) = edit { chat.firstOrNull { it.at == at }?.approved = true }
+
+    suspend fun addStyle(prompt: String, reply: String) = edit {
+        style += StyleExample(prompt.take(400), reply.take(600), now())
+        while (style.size > 40) style.removeAt(0)
+        memories.remember("estilo", "Cuando me dicen «${prompt.take(80)}» respondo: «${reply.take(160)}»", now(), "chat")
+    }
+
+    suspend fun addQuiz(r: QuizRound) = edit {
+        quiz += r
+        while (quiz.size > 100) quiz.removeAt(0)
+        memories.remember("decisión", "${r.question} → ${r.answer}", now(), "prueba")
+        if (r.lesson.isNotBlank()) memories.remember("estilo", r.lesson, now(), "prueba")
+    }
+
+    // ==================== ACCIONES Y AVISOS ====================
+
+    suspend fun proposeAction(a: PendingAction): PendingAction = edit {
+        actions += a
+        while (actions.size > 100) actions.removeAt(0)
+        a.copy()
+    }
+
+    suspend fun setActionStatus(id: String, status: String, result: String? = null) = edit {
+        actions.firstOrNull { it.id == id }?.let { it.status = status; it.result = result }
+    }
+
+    fun action(id: String) = state.actions.firstOrNull { it.id == id }?.copy()
+
+    /** Avisos nuevos para este momento; quedan marcados para no repetirlos. */
+    suspend fun takeNudges(arrivedAt: Place? = null): List<Nudge> = edit {
+        val t = now()
+        val list = nudges(this, t, arrivedAt)
+        list.forEach { nudged[it.key] = t }
+        nudged.entries.removeAll { t - it.value > 3L * 24 * 3600 * 1000 }
+        list
+    }
 
     /** Borra todo lo que Cookie sabe de ti. */
     suspend fun wipe() = mutex.withLock {

@@ -11,7 +11,7 @@ val spotifyClientId: String = (project.findProperty("spotifyClientId") as String
 
 android {
     namespace = "com.aria.cookie"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.aria.cookie"
@@ -65,6 +65,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.anthropic:anthropic-java:2.65.0")
+    implementation("androidx.health.connect:connect-client:1.1.0")
+    implementation("androidx.biometric:biometric:1.1.0")
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     testImplementation("junit:junit:4.13.2")

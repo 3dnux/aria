@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Cookie</string>
+    <string name="widget_description">Tu copia: qué toca ahora, tu próximo evento y hablarle por voz</string>
+    <string name="health_rationale">Cookie lee tu sueño y tus pasos para conocer tu ritmo y avisarte cuando dormiste poco o te moviste poco. Los datos se quedan en tu teléfono.</string>
 </resources>

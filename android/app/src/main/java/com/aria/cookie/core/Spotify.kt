@@ -10,7 +10,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.FormBody
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
@@ -42,6 +44,8 @@ object SpotifyAuth {
         "user-read-playback-state",
         "user-library-read",
         "user-follow-read",
+        // Para que tu copia pueda poner música por ti:
+        "user-modify-playback-state",
     )
 
     data class Pkce(val verifier: String, val challenge: String, val state: String)
@@ -66,7 +70,7 @@ object SpotifyAuth {
             .addQueryParameter("scope", SCOPES.joinToString(" "))
             .build().toString()
 
-    data class Tokens(val access: String, val refresh: String?, val expiresAt: Long)
+    data class Tokens(val access: String, val refresh: String?, val expiresAt: Long, val scope: String? = null)
 
     fun exchangeCode(clientId: String, code: String, verifier: String): Tokens = tokenRequest(
         FormBody.Builder()
@@ -96,6 +100,7 @@ object SpotifyAuth {
                 access = o.str("access_token")!!,
                 refresh = o.str("refresh_token"),
                 expiresAt = System.currentTimeMillis() + (o.str("expires_in")?.toLong() ?: 3600) * 1000 - 60_000,
+                scope = o.str("scope"),
             )
         }
     }
@@ -126,6 +131,43 @@ class SpotifyApi(private val token: () -> String) {
         val now = get("/me/player/currently-playing")?.jsonObject?.get("item")
             ?.takeIf { it !is JsonNull }?.jsonObject?.let { trackLabel(it) }
         return SpotifySnapshot(me?.str("display_name"), artists, tracks, recent, now)
+    }
+
+    /**
+     * Busca y reproduce. Devuelve null si sonó en tu dispositivo activo, o la
+     * URI de Spotify para abrirla en la app (sin Premium o sin dispositivo activo).
+     */
+    fun play(query: String): String? {
+        val q = okhttp3.HttpUrl.Builder().scheme("https").host("api.spotify.com").addPathSegments("v1/search")
+            .addQueryParameter("q", query).addQueryParameter("type", "track,artist,playlist").addQueryParameter("limit", "1").build()
+        val res = getUrl(q.toString())?.jsonObject ?: error("No encontré «$query» en Spotify")
+        fun first(kind: String) = (res[kind]?.jsonObject?.get("items") as? JsonArray)?.firstOrNull { it !is JsonNull }?.jsonObject
+        val artist = first("artists")
+        val track = first("tracks")
+        val playlist = first("playlists")
+        // Si el nombre coincide con un artista, pon el artista; si no, la canción; si no, la playlist.
+        val target = when {
+            artist != null && artist.str("name").equals(query, ignoreCase = true) -> artist
+            track != null -> track
+            playlist != null -> playlist
+            else -> artist
+        } ?: error("No encontré «$query» en Spotify")
+        val uri = target.str("uri")!!
+        val body = if (uri.startsWith("spotify:track:")) """{"uris":["$uri"]}""" else """{"context_uri":"$uri"}"""
+        val req = Request.Builder().url("https://api.spotify.com/v1/me/player/play")
+            .header("Authorization", "Bearer ${token()}")
+            .put(body.toRequestBody("application/json".toMediaType()))
+            .build()
+        http.newCall(req).execute().use { resp -> return if (resp.isSuccessful) null else uri }
+    }
+
+    private fun getUrl(url: String): JsonElement? {
+        val req = Request.Builder().url(url).header("Authorization", "Bearer ${token()}").build()
+        http.newCall(req).execute().use { resp ->
+            if (resp.code == 401) throw SpotifyAuthException()
+            if (!resp.isSuccessful) return null
+            return Json.parseToJsonElement(resp.body?.string().orEmpty())
+        }
     }
 
     private fun get(path: String): JsonElement? {
