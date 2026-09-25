@@ -19,7 +19,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
-      - uses: android-actions/setup-android@v3
+      - name: Android SDK (plataforma 36)
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;35.0.0" > /dev/null
       - name: Tests del núcleo
         run: ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Build APK
