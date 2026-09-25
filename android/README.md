@@ -20,6 +20,14 @@ cuenta y actúa por ti con el nivel de autonomía que elijas. Kotlin + Jetpack C
 | 🔒 **Seguridad** | Estado y claves cifrados con AES-GCM (Android Keystore), bloqueo biométrico, **copia de seguridad cifrada con contraseña** (PBKDF2 + AES-256-GCM) para no perder tu copia, diagnóstico de errores sin datos personales. |
 | ⚡ **Coste y rapidez** | Caché de prompts (la parte estable del sistema), recuerdos por lotes, streaming, entradas de herramientas validadas en el cliente. |
 
+## ARIA, el cerebro local
+
+- **M1** decide por mensaje si responde en el teléfono o con Claude, con qué esfuerzo y si busca en la web.
+- **M2** contesta al instante (sin conexión y gratis) lo que ya sabe de ti y aprende de tus correcciones; toca «Pregúntale a Claude» si no te basta.
+- **M3** descubre patrones en tu vida («cuando duermes poco, al día siguiente tu estrés sube, 7 de 8 veces»), te avisa cuando se activan y mejora la memoria por asociación.
+
+Ajustes → «ARIA» muestra cuántos mensajes resolvió en el teléfono, el ahorro estimado y lo que aprendió. Ver el [README principal](../README.md).
+
 ## Configurar
 
 La app tiene una bienvenida guiada. Resumen:

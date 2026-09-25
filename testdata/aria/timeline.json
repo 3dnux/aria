@@ -1,0 +1,852 @@
+[
+ {
+  "at": 1772323500000,
+  "kind": "sueño",
+  "text": "a dormir (5h 10min)"
+ },
+ {
+  "at": 1772348400000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1772355600000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1772370000000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1772377200000,
+  "kind": "estrés",
+  "text": "alto"
+ },
+ {
+  "at": 1772398800000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1772402400000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1772407800000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1772434800000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1772436000000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1772442000000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1772456400000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1772488800000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1772494200000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1772521200000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1772522400000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1772528400000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1772542800000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1772575200000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1772580600000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1772607600000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1772608800000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1772614800000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1772629200000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1772658000000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1772661600000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1772667000000,
+  "kind": "sueño",
+  "text": "a dormir (5h 10min)"
+ },
+ {
+  "at": 1772694000000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1772695200000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1772701200000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1772715600000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1772722800000,
+  "kind": "estrés",
+  "text": "alto"
+ },
+ {
+  "at": 1772748000000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1772753400000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1772802000000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1772834400000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1772839800000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1772888400000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1772917200000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1772920800000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1772926200000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1772953200000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1772954400000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1772960400000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1772974800000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773007200000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773012600000,
+  "kind": "sueño",
+  "text": "a dormir (5h 10min)"
+ },
+ {
+  "at": 1773039600000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1773040800000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773046800000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1773061200000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773068400000,
+  "kind": "estrés",
+  "text": "alto"
+ },
+ {
+  "at": 1773093600000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773099000000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1773126000000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1773127200000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773133200000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1773147600000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773176400000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773180000000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773185400000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1773212400000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1773219600000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1773234000000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773266400000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773271800000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1773298800000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1773300000000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773306000000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1773320400000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773352800000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773358200000,
+  "kind": "sueño",
+  "text": "a dormir (5h 10min)"
+ },
+ {
+  "at": 1773406800000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773435600000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773439200000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773444600000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1773493200000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773525600000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773531000000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1773558000000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1773559200000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773565200000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1773579600000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773612000000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773617400000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1773644400000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1773651600000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1773666000000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773694800000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773698400000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773703800000,
+  "kind": "sueño",
+  "text": "a dormir (5h 10min)"
+ },
+ {
+  "at": 1773730800000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1773732000000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773738000000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1773752400000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773759600000,
+  "kind": "estrés",
+  "text": "alto"
+ },
+ {
+  "at": 1773784800000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773790200000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1773817200000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1773818400000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773824400000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1773831600000,
+  "kind": "estrés",
+  "text": "alto"
+ },
+ {
+  "at": 1773838800000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773871200000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773876600000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1773903600000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1773904800000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773910800000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1773925200000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1773954000000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1773957600000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1773963000000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1774011600000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774044000000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1774049400000,
+  "kind": "sueño",
+  "text": "a dormir (5h 10min)"
+ },
+ {
+  "at": 1774098000000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774105200000,
+  "kind": "estrés",
+  "text": "alto"
+ },
+ {
+  "at": 1774130400000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1774135800000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1774162800000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1774164000000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1774170000000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1774184400000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774213200000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1774216800000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1774222200000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1774249200000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1774250400000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1774256400000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1774270800000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774303200000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1774308600000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1774335600000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1774336800000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1774342800000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1774357200000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774389600000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1774395000000,
+  "kind": "sueño",
+  "text": "a dormir (5h 10min)"
+ },
+ {
+  "at": 1774422000000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1774423200000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1774429200000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1774443600000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774450800000,
+  "kind": "estrés",
+  "text": "alto"
+ },
+ {
+  "at": 1774472400000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1774476000000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1774481400000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1774508400000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1774515600000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1774530000000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774562400000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1774567800000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1774616400000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774648800000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1774654200000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1774702800000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774731600000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1774735200000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1774740600000,
+  "kind": "sueño",
+  "text": "a dormir (5h 10min)"
+ },
+ {
+  "at": 1774767600000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1774768800000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1774774800000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1774789200000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774796400000,
+  "kind": "estrés",
+  "text": "alto"
+ },
+ {
+  "at": 1774821600000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ },
+ {
+  "at": 1774827000000,
+  "kind": "sueño",
+  "text": "a dormir (7h 10min)"
+ },
+ {
+  "at": 1774854000000,
+  "kind": "lugar",
+  "text": "llegaste a gimnasio"
+ },
+ {
+  "at": 1774855200000,
+  "kind": "música",
+  "text": "Bad Bunny"
+ },
+ {
+  "at": 1774861200000,
+  "kind": "lugar",
+  "text": "llegaste a trabajo"
+ },
+ {
+  "at": 1774875600000,
+  "kind": "dijo",
+  "text": "hoy comí tacos"
+ },
+ {
+  "at": 1774908000000,
+  "kind": "app",
+  "text": "Instagram 15 min"
+ }
+]

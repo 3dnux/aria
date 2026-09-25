@@ -121,5 +121,36 @@ fun nudges(s: CookieState, now: Long, arrivedAt: Place? = null): List<Nudge> {
         if (now - last.at < 3_600_000L) out += Nudge("misión:${m.id}:${last.at}", "🎯 ${m.goal.take(40)}", last.text.take(240))
     }
 
+    // 8. ARIA M3: un patrón tuyo acaba de activarse (p. ej. dormiste poco → suele subir tu estrés).
+    out += patternNudges(s, now, day)
+
     return out.filter { it.key !in s.nudged }
+}
+
+private val NOTABLE = setOf("estrés:alto", "sueño:corto")
+
+/** Avisos cuando ocurre la causa de un patrón y su efecto aún no ha pasado. */
+fun patternNudges(s: CookieState, now: Long, day: String): List<Nudge> {
+    if (s.patterns.isEmpty()) return emptyList()
+    val recent = s.timeline.filter { now - it.at < 12 * 3_600_000L }
+        .map { it.at to com.aria.cookie.aria.Patterns.symbol(it) }.filter { it.second.isNotEmpty() }
+    val out = mutableListOf<Nudge>()
+    for (p in s.patterns) {
+        val music = p.effect.startsWith("música:")
+        if (p.effect !in NOTABLE && !music) continue
+        val cause = recent.lastOrNull { it.second == p.cause } ?: continue
+        val limit = minOf(p.windowHours * 3_600_000L, 12 * 3_600_000L)
+        if (now - cause.first > limit) continue
+        if (recent.any { it.second == p.effect && it.first > cause.first }) continue // ya pasó
+        val text = com.aria.cookie.aria.Patterns.describe(p) + "."
+        out += if (music) {
+            val artist = p.effect.removePrefix("música:")
+            Nudge("patrón:${p.cause}:${p.effect}:$day", "🎧 ¿Pongo a $artist?", text,
+                PendingAction(type = ActionTypes.PLAY_MUSIC, params = mapOf("consulta" to artist), description = describeAction(ActionTypes.PLAY_MUSIC, mapOf("consulta" to artist))))
+        } else {
+            Nudge("patrón:${p.cause}:${p.effect}:$day", "🔗 Ojo: ${com.aria.cookie.aria.Patterns.human(p.cause)}",
+                "$text Tómatelo con calma hoy y date un respiro si puedes.")
+        }
+    }
+    return out
 }

@@ -20,6 +20,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.aria.cookie.core.ChatMessage
+import com.anthropic.models.beta.messages.BetaOutputConfig
 import com.aria.cookie.core.ClaudeBrain
 import com.aria.cookie.core.DayEntry
 import com.aria.cookie.core.Engine
@@ -131,6 +132,7 @@ class CookieApp : Application() {
             days = s.days.takeLast(3),
             currentPlace = currentPlace(s)?.takeIf { it.known }?.label,
             guess = predictContext(s, System.currentTimeMillis()),
+            patterns = s.patterns.toList(),
         )
     }
 
@@ -147,20 +149,46 @@ class CookieApp : Application() {
      * Habla con tu copia desde cualquier sitio (app, voz, notificación, reloj).
      * Guarda la conversación, aprende de ella y ejecuta lo que tenga permiso automático.
      */
-    suspend fun askTwin(text: String, onDelta: ((String) -> Unit)? = null): String {
+    suspend fun askTwin(text: String, onDelta: ((String) -> Unit)? = null, forceClaude: Boolean = false): String {
         engine.addChat(ChatMessage(fromUser = true, text = text.trim()))
         CoroutineScope(Dispatchers.IO).launch { runCatching { learnDeep(text, now = false) } }
+
+        // ARIA M1: ¿se puede responder en el teléfono? ¿cuánto esfuerzo merece?
+        val route = com.aria.cookie.aria.Router.route(text)
+        if (route.tier == com.aria.cookie.aria.Router.Tier.LOCAL && !forceClaude) {
+            // ARIA M2: respuesta local si es lo bastante segura (instantánea, gratis, sin conexión).
+            val s = engine.current()
+            val decision = s.gate.decide(com.aria.cookie.aria.LocalAnswerer.candidates(route.intent, s, System.currentTimeMillis()))
+            if (decision.exit || !settings.hasClaude && decision.answer.isNotBlank()) {
+                engine.addChat(ChatMessage(false, decision.answer, route = "local", localConfidence = decision.confidence))
+                engine.countRoute("local")
+                onDelta?.let { d -> withContext(Dispatchers.Main) { d(decision.answer) } }
+                return decision.answer
+            }
+        }
         if (!settings.hasClaude) {
             val msg = "Para hablar necesito tu clave de Claude (Ajustes). Mientras tanto, ya aprendí de lo que me dijiste. 🍪"
             engine.addChat(ChatMessage(false, msg))
             return msg
         }
+        val effort = when (route.effort) {
+            com.aria.cookie.aria.Router.Effort.LOW -> BetaOutputConfig.Effort.LOW
+            com.aria.cookie.aria.Router.Effort.MEDIUM -> BetaOutputConfig.Effort.MEDIUM
+            com.aria.cookie.aria.Router.Effort.HIGH -> BetaOutputConfig.Effort.HIGH
+        }
+        val routeKey = "claude:" + route.effort.name.lowercase() + if (route.webSearches > 0) "+web" else ""
         return try {
             val ctx = twinContext(text)
             val history = engine.current().chat.toList()
-            val reply = withContext(Dispatchers.IO) { brain().twin(ctx, history, hooks(onDelta?.let { d -> { s: String -> CoroutineScope(Dispatchers.Main).launch { d(s) }; Unit } })) }
+            val reply = withContext(Dispatchers.IO) {
+                brain().twin(
+                    ctx, history, hooks(onDelta?.let { d -> { s: String -> CoroutineScope(Dispatchers.Main).launch { d(s) }; Unit } }),
+                    effort = effort, maxSearches = route.webSearches.toLong(),
+                )
+            }
             val ids = reply.actions.map { a -> engine.proposeAction(a).id.also { runIfAutomatic(a) } }
-            engine.addChat(ChatMessage(false, reply.text, actions = ids))
+            engine.addChat(ChatMessage(false, reply.text, actions = ids, route = routeKey))
+            engine.countRoute(routeKey)
             reply.text
         } catch (e: Exception) {
             CrashLog.write("twin", e.stackTraceToString())
@@ -439,6 +467,8 @@ class CookieWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         val arrived = runCatching { app.senseAll() }.getOrNull()
         runCatching { app.worldWork() }
         engine.takeNudges(arrived).take(2).forEach { app.notifyNudge(it) }
+        // ARIA M3: patrones de tu vida (en el teléfono, sin IA).
+        if (engine.patternsDue()) runCatching { engine.minePatterns() }.onFailure { CrashLog.write("aria", it.toString()) }
         if (engine.researchDue()) runCatching { app.research() }.onFailure { engine.setError(it.message) }
         if (engine.briefingDue()) app.notifyBriefing(engine.deliver(5), engine.current().profile)
         runCatching { app.mindWork() }.onFailure { CrashLog.write("mente", it.toString()) }

@@ -93,6 +93,7 @@ fun learnHeart(s: CookieState, samples: List<HeartSample>, now: Long) {
     val week = h.heart.filter { now - it.at < 7 * 86_400_000L }.map { it.bpm }
     if (week.size >= 20) h.restingBpm = week.sorted()[week.size / 10] // percentil 10 ≈ reposo
     val recent = h.heart.filter { now - it.at < 2 * 3_600_000L }.map { it.bpm }
+    val before = h.stress
     h.stress = if (recent.size >= 3 && h.restingBpm > 0) {
         val ratio = recent.average() / h.restingBpm
         when {
@@ -101,4 +102,6 @@ fun learnHeart(s: CookieState, samples: List<HeartSample>, now: Long) {
             else -> "bajo"
         }
     } else null
+    // A la línea de tiempo (para que ARIA M3 lo relacione con otras cosas).
+    if (h.stress == "alto" && before != "alto") s.log(now, "estrés", "alto")
 }

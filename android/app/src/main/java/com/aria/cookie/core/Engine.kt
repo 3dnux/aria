@@ -54,6 +54,11 @@ data class CookieState(
     val photoDays: MutableMap<String, Int> = mutableMapOf(),
     var lastPhotoSync: Long = 0,
     var onboarded: Boolean = false,
+    // ARIA: cerebro local
+    val gate: com.aria.cookie.aria.Gate = com.aria.cookie.aria.Gate(),
+    val patterns: MutableList<com.aria.cookie.aria.Pattern> = mutableListOf(),
+    var lastPatterns: Long = 0,
+    val routeStats: MutableMap<String, Int> = mutableMapOf(),
 )
 
 /** Un aviso que se mostró, para que puedas decir si te sirvió. */
@@ -362,6 +367,33 @@ class Engine(
     suspend fun learnHeart(samples: List<HeartSample>) = edit { learnHeart(this, samples, now()) }
 
     suspend fun setOnboarded() = edit { onboarded = true }
+
+    // ==================== ARIA ====================
+
+    /** ARIA M3: vuelve a minar los patrones de tu línea de tiempo (sin conexión). */
+    suspend fun minePatterns(): Int {
+        val events = mutex.withLock { state.timeline.toList() }
+        val found = com.aria.cookie.aria.Patterns.mine(events)
+        return edit {
+            patterns.clear()
+            patterns += found
+            lastPatterns = now()
+            found.size
+        }
+    }
+
+    fun patternsDue() = now() - state.lastPatterns >= 12 * 3_600_000L && state.timeline.size >= 20
+
+    /** ARIA M2: aprende de si una respuesta local era buena. */
+    suspend fun gateObserve(at: Long, correct: Boolean) = edit {
+        val m = chat.firstOrNull { it.at == at } ?: return@edit
+        val conf = m.localConfidence ?: return@edit
+        if (m.gateJudged) return@edit
+        m.gateJudged = true
+        gate.observe(conf, correct)
+    }
+
+    suspend fun countRoute(key: String) = edit { routeStats[key] = (routeStats[key] ?: 0) + 1 }
 
     // ==================== COPIA DE SEGURIDAD ====================
 

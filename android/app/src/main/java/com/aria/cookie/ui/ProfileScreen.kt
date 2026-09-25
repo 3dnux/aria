@@ -113,6 +113,16 @@ fun ProfileScreen(vm: MainViewModel, state: CookieState, platform: Platform) {
             OutlinedButton(onClick = { newMission = true }) { Text("Nueva misión") }
         }
 
+        Section("🔗 Patrones de tu vida (ARIA)") {
+            if (state.patterns.isEmpty()) {
+                Hint("ARIA busca en tu línea de tiempo cosas que suelen venir juntas (p. ej. «cuando duermes poco, al día siguiente tu estrés sube»), comparando con los días en que no pasó. Necesita unas semanas de datos.")
+            } else {
+                Hint("Correlaciones que se repiten en tu vida (no son certezas). Se recalculan cada 12 horas, en tu teléfono.")
+                state.patterns.take(8).forEach { Text("• " + com.aria.cookie.aria.Patterns.describe(it)) }
+            }
+            OutlinedButton(onClick = vm::minePatterns) { Text("Buscar patrones ahora") }
+        }
+
         Section("Quién eres") {
             Field("Nombre", p.name)
             Field("Trabajo", p.occupation)

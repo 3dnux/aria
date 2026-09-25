@@ -1,0 +1,50 @@
+[
+ {
+  "cause": "lugar:gimnasio",
+  "effect": "lugar:trabajo",
+  "window_hours": 3,
+  "count": 22,
+  "support": 22,
+  "probability": 1,
+  "baseline": 0.002824858757062147,
+  "lift": 354,
+  "median_lag_hours": 2,
+  "score": 7.540157597259209
+ },
+ {
+  "cause": "lugar:gimnasio",
+  "effect": "música:bad bunny",
+  "window_hours": 3,
+  "count": 22,
+  "support": 18,
+  "probability": 0.8181818181818182,
+  "baseline": 0.002824858757062147,
+  "lift": 289.6363636363637,
+  "median_lag_hours": 0.3333333333333333,
+  "score": 5.324053165213424
+ },
+ {
+  "cause": "sueño:corto",
+  "effect": "estrés:alto",
+  "window_hours": 24,
+  "count": 8,
+  "support": 7,
+  "probability": 0.875,
+  "baseline": 0.0480225988700565,
+  "lift": 18.220588235294116,
+  "median_lag_hours": 15.5,
+  "score": 2.46571658570808
+ },
+ {
+  "cause": "música:bad bunny",
+  "effect": "lugar:trabajo",
+  "window_hours": 3,
+  "count": 28,
+  "support": 18,
+  "probability": 0.6428571428571429,
+  "baseline": 0.17386091127098321,
+  "lift": 3.697536945812808,
+  "median_lag_hours": 1.6666666666666667,
+  "score": 0.9196400122289423
+ }
+]

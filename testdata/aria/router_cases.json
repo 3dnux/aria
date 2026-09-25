@@ -1,0 +1,72 @@
+[
+ {
+  "q": "¿Qué tengo hoy?",
+  "tier": "local",
+  "intent": "agenda"
+ },
+ {
+  "q": "¿qué suelo hacer a esta hora?",
+  "tier": "local",
+  "intent": "rutina"
+ },
+ {
+  "q": "¿Cómo dormí?",
+  "tier": "local",
+  "intent": "sueno"
+ },
+ {
+  "q": "¿dónde estoy?",
+  "tier": "local",
+  "intent": "lugar"
+ },
+ {
+  "q": "¿qué estoy escuchando?",
+  "tier": "local",
+  "intent": "musica"
+ },
+ {
+  "q": "pon música de Bad Bunny",
+  "tier": "claude",
+  "effort": "low",
+  "web": false
+ },
+ {
+  "q": "recuérdame llamar a mamá a las 7",
+  "tier": "claude",
+  "effort": "low",
+  "web": false
+ },
+ {
+  "q": "hola, ¿cómo estás?",
+  "tier": "claude",
+  "effort": "low",
+  "web": false
+ },
+ {
+  "q": "ayúdame a decidir si cambio de trabajo o me quedo",
+  "tier": "claude",
+  "effort": "high",
+  "web": false
+ },
+ {
+  "q": "¿cuándo es el próximo concierto de Natalia Lafourcade en Monterrey?",
+  "tier": "claude",
+  "web": true
+ },
+ {
+  "q": "¿por qué me siento tan cansado últimamente si duermo bien?",
+  "tier": "claude",
+  "effort": "high",
+  "web": false
+ },
+ {
+  "q": "¿cuándo juega el Monterrey hoy?",
+  "tier": "claude",
+  "web": true
+ },
+ {
+  "q": "hoy fui al gimnasio y me sentí genial",
+  "tier": "claude",
+  "web": false
+ }
+]

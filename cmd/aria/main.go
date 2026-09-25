@@ -1,298 +1,263 @@
+// ARIA: el cerebro local de Cookie, en tu ordenador.
+//
+//	aria ruta "¿qué tengo hoy?"            # M1: ¿local o Claude? ¿cuánto esfuerzo? ¿web?
+//	aria analizar copia.cookie             # M1+M2+M3 sobre tu copia de seguridad cifrada
+//	aria demo                              # lo mismo con 30 días de datos de ejemplo
+//
+// La contraseña de la copia se pide por la terminal o se toma de ARIA_PASSWORD.
 package main
 
 import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"os"
+	"sort"
+	"strings"
+	"unicode"
+
+	"aria/internal/copia"
 	"aria/internal/earlyexit"
 	"aria/internal/liquid"
 	"aria/internal/memory"
 	"aria/internal/temporal"
-	"context"
-	"fmt"
-	"hash/fnv"
-	"math"
-	"strings"
-	"sync"
-	"time"
 )
 
-// AriaSystem integración M1 + M2 + M3
-type AriaSystem struct {
-	LiquidNN       *liquid.Controller
-	Memory         *memory.Module3Full
-	embeddingCache map[string][]float32
-	cacheMu        sync.RWMutex
-	config         Config
-}
+const usage = `ARIA — el cerebro local de Cookie
 
-type Config struct {
-	EmbeddingSize int
-	CacheEnabled  bool
-}
+  aria ruta "mensaje"        Cómo se resolvería un mensaje (M1)
+  aria analizar ARCHIVO      Analiza tu copia de seguridad de Cookie (M1 + M2 + M3)
+  aria demo                  Análisis de ejemplo con 30 días sintéticos
 
-// NewAriaSystem crea el sistema integrado
-func NewAriaSystem(strategy earlyexit.Strategy) *AriaSystem {
-	sys := &AriaSystem{
-		LiquidNN:       liquid.NewController(strategy),
-		embeddingCache: make(map[string][]float32),
-		config: Config{
-			EmbeddingSize: 128,
-			CacheEnabled:  true,
-		},
-	}
-
-	// Adaptador para M1
-	liquidAdapter := func(ctx context.Context, input []float32) ([]float32, error) {
-		query := sys.embeddingToString(input)
-		result, err := sys.LiquidNN.ProcessRequest(ctx, query)
-		if err != nil {
-			return nil, err
-		}
-		return sys.resultToEmbedding(result), nil
-	}
-
-	// Adaptador para M2
-	earlyExitAdapter := func(hiddenState []float32) (bool, float64, int) {
-		if len(hiddenState) < 3 {
-			return false, 0.5, 4
-		}
-		confidence := float64(hiddenState[len(hiddenState)-3])
-		shouldExit := hiddenState[len(hiddenState)-2] > 0.5
-		exitLayer := int(hiddenState[len(hiddenState)-1])
-		return shouldExit, confidence, exitLayer
-	}
-
-	sys.Memory = memory.NewModule3Full(liquidAdapter, earlyExitAdapter)
-	return sys
-}
-
-// Process ejecuta pipeline M1→M2→M3
-func (sys *AriaSystem) Process(ctx context.Context, query string) (*Result, error) {
-	start := time.Now()
-
-	// 1. Embedding del query
-	inputEmb := sys.stringToEmbedding(query)
-
-	// 2. M3: Query para recuperar contexto (método público)
-	contextResults := sys.Memory.Query(inputEmb, "", 2, time.Hour)
-
-	// 3. Enriquecer query
-	enrichedQuery := sys.enrichQuery(query, contextResults)
-
-	// 4. M1/M2: Procesar con LiquidNN real
-	liquidResult, err := sys.LiquidNN.ProcessRequest(ctx, enrichedQuery)
-	if err != nil {
-		return nil, err
-	}
-
-	// 5. M3: Process() almacena y genera predicciones (método público)
-	concept := sys.extractConcept(query)
-	m3Result, err := sys.Memory.Process(ctx, inputEmb, concept, liquidResult.FinalConfidence)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Result{
-		Query:          query,
-		EnrichedQuery:  enrichedQuery,
-		Output:         liquidResult.LayerResults[len(liquidResult.LayerResults)-1].EnhancedQuery,
-		Confidence:     liquidResult.FinalConfidence,
-		EarlyExited:    liquidResult.EarlyExited,
-		ExitReason:     liquidResult.ExitReason,
-		LayersUsed:     liquidResult.LayersUsed,
-		TotalLayers:    liquidResult.Topology.AssignedLayers,
-		NodeID:         m3Result.NodeID,
-		ContextNodes:   m3Result.ContextNodes,
-		Predictions:    m3Result.Predictions,
-		ProcessingTime: time.Since(start),
-	}, nil
-}
-
-type Result struct {
-	Query          string
-	EnrichedQuery  string
-	Output         string
-	Confidence     float64
-	EarlyExited    bool
-	ExitReason     string
-	LayersUsed     int
-	TotalLayers    int
-	NodeID         int64
-	ContextNodes   int
-	Predictions    []*temporal.TemporalPrediction
-	ProcessingTime time.Duration
-}
-
-// ==================== HELPERS ====================
-
-func (sys *AriaSystem) stringToEmbedding(s string) []float32 {
-	sys.cacheMu.RLock()
-	if cached, ok := sys.embeddingCache[s]; ok {
-		sys.cacheMu.RUnlock()
-		return cached
-	}
-	sys.cacheMu.RUnlock()
-
-	vec := make([]float32, sys.config.EmbeddingSize)
-	h := fnv.New64a()
-	h.Write([]byte(s))
-	seed := int64(h.Sum64())
-
-	words := strings.Fields(s)
-	wordCount := len(words)
-
-	for i := 0; i < sys.config.EmbeddingSize; i++ {
-		val := math.Sin(float64(seed+int64(i))*0.1) * 0.5
-		if i == 0 {
-			val += float64(wordCount) / 100.0
-		}
-		vec[i] = float32(val)
-	}
-
-	vec = normalize(vec)
-
-	if sys.config.CacheEnabled {
-		sys.cacheMu.Lock()
-		sys.embeddingCache[s] = vec
-		sys.cacheMu.Unlock()
-	}
-
-	return vec
-}
-
-func (sys *AriaSystem) embeddingToString(emb []float32) string {
-	sys.cacheMu.RLock()
-	defer sys.cacheMu.RUnlock()
-	for str, cached := range sys.embeddingCache {
-		if cosineSimilarity(emb, cached) > 0.95 {
-			return str
-		}
-	}
-	return "[embedded_query]"
-}
-
-func (sys *AriaSystem) resultToEmbedding(r *liquid.LiquidResult) []float32 {
-	vec := make([]float32, sys.config.EmbeddingSize)
-	for i := 0; i < sys.config.EmbeddingSize; i++ {
-		vec[i] = float32(r.FinalConfidence * math.Sin(float64(i)*0.1))
-	}
-	if len(vec) >= 3 {
-		vec[len(vec)-3] = float32(r.FinalConfidence)
-		if r.EarlyExited {
-			vec[len(vec)-2] = 1.0
-		}
-		vec[len(vec)-1] = float32(r.LayersUsed)
-	}
-	return normalize(vec)
-}
-
-func (sys *AriaSystem) enrichQuery(query string, ctx []*memory.QueryResult) string {
-	if len(ctx) == 0 {
-		return query
-	}
-
-	var concepts []string
-	for _, c := range ctx {
-		if c.Score > 0.3 {
-			concepts = append(concepts, c.Node.Concept)
-		}
-	}
-
-	if len(concepts) == 0 {
-		return query
-	}
-
-	return fmt.Sprintf("[Contexto: %s] %s",
-		strings.Join(concepts, ", "), query)
-}
-
-func (sys *AriaSystem) extractConcept(q string) string {
-	words := strings.Fields(q)
-	if len(words) == 0 {
-		return "unknown"
-	}
-	if len(words) > 3 {
-		words = words[:3]
-	}
-	return strings.ToLower(strings.Join(words, "_"))
-}
-
-func normalize(v []float32) []float32 {
-	var sum float64
-	for _, x := range v {
-		sum += float64(x * x)
-	}
-	if sum == 0 {
-		return v
-	}
-	norm := float32(math.Sqrt(sum))
-	for i := range v {
-		v[i] /= norm
-	}
-	return v
-}
-
-func cosineSimilarity(a, b []float32) float64 {
-	if len(a) != len(b) {
-		return 0
-	}
-	var dot, na, nb float64
-	for i := range a {
-		dot += float64(a[i]) * float64(b[i])
-		na += float64(a[i]) * float64(a[i])
-		nb += float64(b[i]) * float64(b[i])
-	}
-	if na == 0 || nb == 0 {
-		return 0
-	}
-	return dot / (math.Sqrt(na) * math.Sqrt(nb))
-}
-
-// ==================== MAIN ====================
+M1 Enrutador   decide si un mensaje se responde en el teléfono o con Claude, con qué esfuerzo y si busca en la web
+M2 Cascada     responde en local cuando es lo bastante seguro; su umbral aprende de tus correcciones
+M3 Patrones    descubre relaciones temporales en tu vida y asocia conceptos para recordar mejor
+`
 
 func main() {
-	fmt.Println("╔══════════════════════════════════════════════════════════╗")
-	fmt.Println("║     ARIA - Sistema Integrado (M1 + M2 + M3)             ║")
-	fmt.Println("╚══════════════════════════════════════════════════════════╝")
+	if len(os.Args) < 2 {
+		fmt.Print(usage)
+		os.Exit(2)
+	}
+	switch os.Args[1] {
+	case "ruta":
+		if len(os.Args) < 3 {
+			fail("escribe el mensaje entre comillas")
+		}
+		printRoute(liquid.NewRouter().Route(strings.Join(os.Args[2:], " ")))
+	case "analizar":
+		if len(os.Args) < 3 {
+			fail("indica el archivo de la copia (Ajustes → Copia de seguridad → Exportar)")
+		}
+		data, err := os.ReadFile(os.Args[2])
+		check(err)
+		s, err := copia.Load(data, password())
+		check(err)
+		report(s)
+	case "demo":
+		data, err := os.ReadFile("testdata/aria/timeline.json")
+		check(err)
+		s := &copia.State{}
+		check(json.Unmarshal(data, &s.Timeline))
+		s.Profile.Name = "Demo"
+		for _, m := range []string{"¿Qué tengo hoy?", "pon música de Bad Bunny", "¿qué suelo hacer a esta hora?",
+			"ayúdame a decidir si cambio de trabajo", "¿cuándo es el próximo concierto de Bad Bunny?", "hola, ¿cómo estás?"} {
+			s.Chat = append(s.Chat, struct {
+				FromUser bool   `json:"fromUser"`
+				Text     string `json:"text"`
+			}{true, m})
+		}
+		report(s)
+	default:
+		fmt.Print(usage)
+		os.Exit(2)
+	}
+}
 
-	sys := NewAriaSystem(earlyexit.StrategyAdaptive)
-	ctx := context.Background()
+func printRoute(r liquid.Route) {
+	fmt.Printf("  → %s", r.Tier)
+	if r.Tier == liquid.TierLocal {
+		fmt.Printf(" (%s)", r.Intent)
+	} else {
+		fmt.Printf(" · esfuerzo %s", r.Effort)
+		if r.WebSearches > 0 {
+			fmt.Printf(" · hasta %d búsquedas web", r.WebSearches)
+		}
+	}
+	fmt.Printf(" · complejidad %.2f\n    %s\n", r.Complexity, r.Reason)
+}
 
-	queries := []string{
-		"Analiza el impacto de la inteligencia artificial",
-		"Explica la teoría de la relatividad de Einstein",
-		"Resume los beneficios del ejercicio físico",
-		"¿Qué es la computación cuántica?",
+func report(s *copia.State) {
+	who := s.Profile.Name
+	if who == "" {
+		who = "ti"
+	}
+	fmt.Printf("🧠 ARIA analiza la copia de %s\n", who)
+	fmt.Printf("   %d eventos en la línea de tiempo · %d recuerdos · %d mensajes\n\n", len(s.Timeline), len(s.Memories), len(s.Chat))
+
+	// ---- M3: patrones ----
+	fmt.Println("🔗 M3 · Patrones de tu vida")
+	patterns := temporal.Mine(s.Timeline, temporal.DefaultConfig())
+	if len(patterns) == 0 {
+		fmt.Println("   Aún no hay datos suficientes (hacen falta días con y sin cada cosa).")
+	}
+	for _, p := range patterns {
+		fmt.Printf("   • %s\n", temporal.Describe(p))
 	}
 
-	for i, q := range queries {
-		fmt.Printf("\n🔄 Query %d: %s\n", i+1, q)
-		fmt.Println(strings.Repeat("-", 60))
-
-		res, err := sys.Process(ctx, q)
-		if err != nil {
-			fmt.Printf("   ❌ Error: %v\n", err)
-			continue
-		}
-
-		fmt.Printf("   ⚡ Tiempo: %v\n", res.ProcessingTime)
-		fmt.Printf("   🎯 Confianza: %.1f%%\n", res.Confidence*100)
-		fmt.Printf("   🚪 Capas: %d/%d (EarlyExit: %v)\n",
-			res.LayersUsed, res.TotalLayers, res.EarlyExited)
-		fmt.Printf("   📝 Razón: %s\n", res.ExitReason)
-		fmt.Printf("   💾 Memoria: Nodo %d | Contexto: %d nodos\n",
-			res.NodeID, res.ContextNodes)
-
-		if len(res.Predictions) > 0 {
-			fmt.Printf("   🔮 Predicciones: %d\n", len(res.Predictions))
-			for _, p := range res.Predictions {
-				fmt.Printf("      → %s (%.0f%%)\n",
-					p.ExpectedEvent, p.Confidence*100)
+	// ---- M3: asociaciones ----
+	g := memory.NewConceptGraph()
+	for _, m := range s.Memories {
+		g.AddDocument(append(words(m.Text), m.Tags...), 1)
+	}
+	for _, day := range groupByBlock(s.Timeline) {
+		g.AddDocument(day, 0.5)
+	}
+	if g.Size() > 0 {
+		fmt.Println("\n🕸️ M3 · Asociaciones (lo que en tu vida va junto)")
+		for _, seed := range topConcepts(s, 4) {
+			var names []string
+			for _, a := range g.Spread([]string{seed}, 2, 0.5, 0.2) {
+				if len(names) == 5 {
+					break
+				}
+				names = append(names, a.Concept)
+			}
+			if len(names) > 0 {
+				fmt.Printf("   • %s → %s\n", seed, strings.Join(names, ", "))
 			}
 		}
-
-		if res.ContextNodes > 0 {
-			fmt.Printf("   🧠 Enriquecido: %s\n", res.EnrichedQuery)
-		}
 	}
 
-	fmt.Println("\n✅ Sistema ARIA operativo (M1+M2+M3 integrados)")
+	// ---- M1: enrutado de tus mensajes ----
+	router := liquid.NewRouter()
+	var local, low, medium, high, web, total int
+	for _, c := range s.Chat {
+		if !c.FromUser || strings.HasPrefix(c.Text, "✏️") {
+			continue
+		}
+		total++
+		r := router.Route(c.Text)
+		switch {
+		case r.Tier == liquid.TierLocal:
+			local++
+		case r.Effort == liquid.EffortLow:
+			low++
+		case r.Effort == liquid.EffortMedium:
+			medium++
+		default:
+			high++
+		}
+		if r.WebSearches > 0 {
+			web++
+		}
+	}
+	if total > 0 {
+		fmt.Println("\n🧭 M1 · Cómo se reparten tus mensajes")
+		fmt.Printf("   %d en el teléfono (sin IA) · %d esfuerzo bajo · %d medio · %d alto · %d con búsqueda web\n", local, low, medium, high, web)
+		// Coste relativo aproximado: alto=4, medio=2, bajo=1, local=0 (vs. todo en alto).
+		used := float64(low + medium*2 + high*4)
+		fmt.Printf("   Ahorro estimado frente a usar siempre el máximo: %.0f%%\n", 100*(1-used/float64(total*4)))
+	}
+
+	// ---- M2: cascada ----
+	fmt.Println("\n⚡ M2 · Respuestas locales")
+	if s.Gate != nil {
+		gate := earlyexit.Gate{Threshold: s.Gate.Threshold, Correct: s.Gate.Correct, Wrong: s.Gate.Wrong}
+		fmt.Printf("   Umbral aprendido: %.0f%%", gate.Threshold*100)
+		if acc, ok := gate.Accuracy(); ok {
+			fmt.Printf(" · aciertos valorados: %.0f%% (%d/%d)", acc*100, gate.Correct, gate.Correct+gate.Wrong)
+		}
+		fmt.Println()
+	} else {
+		fmt.Println("   Umbral inicial 70%: bajará si aciertan y subirá si las corriges.")
+	}
+}
+
+// words palabras con contenido (≥4 letras, sin tildes, sin palabras vacías).
+func words(text string) []string {
+	var out []string
+	for _, w := range strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }) {
+		w = fold(w)
+		if len([]rune(w)) >= 4 && !stop[w] {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+var stop = map[string]bool{}
+
+func init() {
+	for _, w := range strings.Fields("para como cuando pero porque esta este esto estoy estas mucho muy todo todos tengo tiene hace desde sobre entre donde cual quien algo nada siempre nunca ahora luego despues tambien solo mas menos otra otro cada") {
+		stop[w] = true
+	}
+}
+
+func fold(s string) string {
+	r := strings.NewReplacer("á", "a", "é", "e", "í", "i", "ó", "o", "ú", "u", "ü", "u")
+	return r.Replace(s)
+}
+
+// groupByBlock los símbolos de cada bloque de 3 horas (lo que pasa a la vez se asocia).
+func groupByBlock(events []temporal.Event) [][]string {
+	days := map[int64][]string{}
+	for _, e := range events {
+		if s := temporal.Symbol(e); s != "" {
+			days[e.At/(3*3_600_000)] = append(days[e.At/(3*3_600_000)], s)
+		}
+	}
+	var out [][]string
+	for _, d := range days {
+		out = append(out, d)
+	}
+	return out
+}
+
+func topConcepts(s *copia.State, n int) []string {
+	count := map[string]int{}
+	for _, e := range s.Timeline {
+		if sym := temporal.Symbol(e); sym != "" {
+			count[sym]++
+		}
+	}
+	for _, m := range s.Memories {
+		for _, w := range words(m.Text) {
+			count[w] += 2
+		}
+	}
+	keys := make([]string, 0, len(count))
+	for k := range count {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if count[keys[i]] != count[keys[j]] {
+			return count[keys[i]] > count[keys[j]]
+		}
+		return keys[i] < keys[j]
+	})
+	if len(keys) > n {
+		keys = keys[:n]
+	}
+	return keys
+}
+
+func password() string {
+	if p := os.Getenv("ARIA_PASSWORD"); p != "" {
+		return p
+	}
+	fmt.Fprint(os.Stderr, "Contraseña de la copia: ")
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	return strings.TrimSpace(line)
+}
+
+func check(err error) {
+	if err != nil {
+		fail(err.Error())
+	}
+}
+
+func fail(msg string) {
+	fmt.Fprintln(os.Stderr, "❌", msg)
+	os.Exit(1)
 }

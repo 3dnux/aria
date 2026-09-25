@@ -110,16 +110,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ==================== TU COPIA ====================
 
     /** Habla con tu copia; la respuesta llega en streaming (y en voz si [spoken]). */
-    fun sendToTwin(text: String, spoken: Boolean = settings.speakReplies) {
+    fun sendToTwin(text: String, spoken: Boolean = settings.speakReplies, forceClaude: Boolean = false) {
         if (text.isBlank()) return
         viewModelScope.launch {
             twinThinking.value = true
             streaming.value = ""
             try {
-                cookie.askTwin(text) { delta ->
+                cookie.askTwin(text, forceClaude = forceClaude, onDelta = { delta ->
                     streaming.value += delta
                     if (spoken) voiceSink?.invoke(delta)
-                }
+                })
             } finally {
                 streaming.value = ""
                 twinThinking.value = false
@@ -135,6 +135,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun approveTwin(m: ChatMessage) = work {
+        if (m.route == "local") engine.gateObserve(m.at, correct = true) // ARIA M2 aprende
         engine.addStyle(promptBefore(m), m.text)
         engine.markApproved(m.at)
         "✅ Anotado: así hablas tú"
@@ -142,10 +143,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun correctTwin(m: ChatMessage, better: String) = work {
         if (better.isBlank()) return@work null
+        if (m.route == "local") engine.gateObserve(m.at, correct = false) // ARIA M2 se vuelve más exigente
         engine.addStyle(promptBefore(m), better)
         engine.addChat(ChatMessage(true, "✏️ Yo lo diría así: $better"))
         "✏️ Aprendí de tu corrección"
     }
+
+    /** Una respuesta local no bastó: se pregunta a Claude y ARIA M2 sube su exigencia. */
+    fun escalate(m: ChatMessage) {
+        viewModelScope.launch { engine.gateObserve(m.at, correct = false) }
+        sendToTwin(promptBefore(m).ifBlank { m.text }, forceClaude = true)
+    }
+
+    fun minePatterns() = work { "🔗 ARIA encontró ${engine.minePatterns()} patrones en tu vida" }
 
     fun startQuiz() {
         if (!settings.hasClaude) { toast.value = "La prueba necesita tu clave de Claude"; return }

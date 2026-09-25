@@ -81,16 +81,21 @@ fun Memory.score(now: Long): Double {
 
 /**
  * Recuerdos relevantes para una pregunta: búsqueda híbrida por significado
- * (raíces en español + sinónimos + etiquetas + parecido de letras) e importancia.
+ * (raíces en español + sinónimos + etiquetas + parecido de letras), más la
+ * red de conceptos de ARIA M3, que añade lo que en tu vida va asociado a la
+ * pregunta ("maratón" → entrenar, rodilla, dormir), e importancia.
  */
 fun List<Memory>.relevant(query: String, now: Long, n: Int = 25): List<Memory> {
     val q = concepts(query)
     if (q.isEmpty()) return sortedByDescending { it.score(now) }.take(n)
-    return map { m ->
-        val c = concepts(m.text) + m.tags.flatMap { concepts(it) }
+    val docs = map { m -> m to (concepts(m.text) + m.tags.flatMap { concepts(it) }) }
+    val graph = com.aria.cookie.aria.ConceptGraph().apply { docs.forEach { addDocument(it.second) } }
+    val associated = graph.spread(q, hops = 2, decay = 0.5, minLevel = 0.25).take(8).associate { it.concept to it.level }
+    return docs.map { (m, c) ->
         val exact = q.count { it in c }
+        val assoc = c.sumOf { associated[it] ?: 0.0 }
         val fuzzy = if (exact == 0) q.maxOf { a -> c.maxOfOrNull { b -> trigramSimilarity(a, b) } ?: 0.0 } else 0.0
-        m to (exact * 3.0 + (if (fuzzy > 0.5) fuzzy * 2 else 0.0) + m.score(now) * 0.5)
+        m to (exact * 3.0 + assoc * 1.5 + (if (fuzzy > 0.5) fuzzy * 2 else 0.0) + m.score(now) * 0.5)
     }.sortedByDescending { it.second }.take(n).map { it.first }
 }
 

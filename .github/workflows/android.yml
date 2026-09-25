@@ -2,12 +2,22 @@ name: Android APK
 
 on:
   push:
-    paths: ["android/**", ".github/workflows/android.yml"]
+    paths: ["android/**", "internal/**", "cmd/**", "testdata/**", "go.mod", ".github/workflows/android.yml"]
   pull_request:
-    paths: ["android/**", ".github/workflows/android.yml"]
+    paths: ["android/**", "internal/**", "cmd/**", "testdata/**", "go.mod", ".github/workflows/android.yml"]
   workflow_dispatch:
 
 jobs:
+  aria-go:
+    # Módulos ARIA en Go (mismos casos de prueba que la app).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./... && go test ./...
+
   build:
     runs-on: ubuntu-latest
     defaults:

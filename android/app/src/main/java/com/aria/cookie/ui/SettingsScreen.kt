@@ -70,6 +70,26 @@ fun SettingsScreen(vm: MainViewModel, state: CookieState, platform: Platform) {
             Toggle("Guardar recuerdos de lo que le cuento", s.learnWithClaude) { vm.update { learnWithClaude = it } }
         }
 
+        Section("🧠 ARIA · el cerebro local") {
+            val stats = state.routeStats
+            val local = stats["local"] ?: 0
+            val claude = stats.filterKeys { it.startsWith("claude") }
+            val low = claude.filterKeys { it.startsWith("claude:low") }.values.sum()
+            val medium = claude.filterKeys { it.startsWith("claude:medium") }.values.sum()
+            val high = claude.filterKeys { it.startsWith("claude:high") }.values.sum()
+            val total = local + low + medium + high
+            Hint("M1 decide si cada mensaje se responde en tu teléfono o con Claude (y con cuánto esfuerzo o búsqueda web). " +
+                "M2 responde al instante lo que ya sabe de ti y aprende de tus correcciones. M3 descubre patrones y asocia recuerdos.")
+            if (total > 0) {
+                Field("Mensajes", "$local en tu teléfono · $low esfuerzo bajo · $medium medio · $high alto")
+                val saved = 100 * (1 - (low + medium * 2 + high * 4).toDouble() / (total * 4))
+                Field("Ahorro", "~${saved.toInt()}% frente a usar siempre el máximo")
+            }
+            val g = state.gate
+            Field("Umbral M2", "${(g.threshold * 100).toInt()}%" + (g.accuracy()?.let { " · aciertos ${(it * 100).toInt()}% (${g.correct}/${g.correct + g.wrong})" } ?: ""))
+            Field("Patrones", "${state.patterns.size} descubiertos")
+        }
+
         Section("🎧 Spotify") {
             if (connected) {
                 Text("Conectado. Aprendo de tus artistas, géneros y de a qué hora y dónde escuchas música.", color = SpotifyGreen)

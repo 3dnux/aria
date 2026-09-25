@@ -39,6 +39,7 @@ data class TwinContext(
     val days: List<DayEntry> = emptyList(),
     val currentPlace: String? = null,
     val guess: ContextGuess? = null,
+    val patterns: List<com.aria.cookie.aria.Pattern> = emptyList(),
 )
 
 /** Respuesta de la copia más las acciones que propuso. */
@@ -187,10 +188,13 @@ class ClaudeBrain(apiKey: String, private val model: String) {
     // ==================== TU COPIA ====================
 
     /** Responde como tú. Las acciones que proponga quedan pendientes de tu confirmación (o se hacen solas si lo permitiste). */
-    fun twin(ctx: TwinContext, conversation: List<ChatMessage>, hooks: TwinHooks): TwinReply {
+    fun twin(
+        ctx: TwinContext, conversation: List<ChatMessage>, hooks: TwinHooks,
+        effort: BetaOutputConfig.Effort = BetaOutputConfig.Effort.MEDIUM, maxSearches: Long = 3,
+    ): TwinReply {
         val proposed = mutableListOf<PendingAction>()
         val reply = ask(
-            twinSystem(ctx), conversation.takeLast(20), maxSearches = 3,
+            twinSystem(ctx), conversation.takeLast(20), maxSearches = maxSearches, effort = effort,
             tools = twinTools(ctx.homeEntities.isNotEmpty()), onDelta = hooks.onDelta,
         ) { name, input -> handleTool(name, input, hooks, proposed) }
         return TwinReply(reply.trim(), proposed)
@@ -342,6 +346,11 @@ data class ChatMessage(
     val actions: List<String> = emptyList(),
     /** Tu corrección: "así lo habría dicho yo". */
     var approved: Boolean = false,
+    /** ARIA: cómo se resolvió ("local", "claude:low"...). */
+    val route: String? = null,
+    /** ARIA M2: confianza de una respuesta local. */
+    val localConfidence: Double? = null,
+    var gateJudged: Boolean = false,
 )
 
 // ==================== HERRAMIENTAS DE LA COPIA ====================
@@ -471,6 +480,10 @@ fun twinSystem(c: TwinContext): SystemPrompt {
         }
         appendLine("\nLO QUE SÉ DE MÍ")
         append(describeContext(c))
+        if (c.patterns.isNotEmpty()) {
+            appendLine("\nPATRONES QUE ARIA DESCUBRIÓ EN MI VIDA (correlaciones, no certezas)")
+            c.patterns.take(6).forEach { appendLine("- " + com.aria.cookie.aria.Patterns.describe(it)) }
+        }
         if (c.style.isNotEmpty()) {
             appendLine("\nASÍ RESPONDO YO (ejemplos reales; imita el tono)")
             c.style.takeLast(12).forEach { appendLine("- A «${it.prompt.take(120)}» → «${it.reply.take(240)}»") }

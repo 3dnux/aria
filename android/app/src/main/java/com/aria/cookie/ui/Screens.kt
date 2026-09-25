@@ -345,6 +345,12 @@ private fun ChatBubble(m: ChatMessage, actions: Map<String, com.aria.cookie.core
             color = if (m.fromUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
         )
         m.actions.mapNotNull { actions[it] }.forEach { a -> Box(Modifier.widthIn(max = 300.dp).padding(top = 4.dp)) { ActionCard(a, vm, platform) } }
+        if (m.route == "local") {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Hint("⚡ En tu teléfono, sin IA · ${((m.localConfidence ?: 0.0) * 100).toInt()}% seguro")
+                TextButton(onClick = { vm.escalate(m) }) { Text("Pregúntale a Claude", style = MaterialTheme.typography.labelSmall) }
+            }
+        }
         if (!m.fromUser && !m.text.startsWith("⚠️")) {
             Row {
                 TextButton(onClick = { vm.approveTwin(m) }, enabled = !m.approved) {
