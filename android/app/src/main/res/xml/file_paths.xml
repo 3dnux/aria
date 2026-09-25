@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Solo el archivo de diagnóstico; el perfil nunca se comparte así -->
+    <files-path name="diagnostico" path="diag/" />
+</paths>

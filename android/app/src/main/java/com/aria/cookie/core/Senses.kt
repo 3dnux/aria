@@ -71,6 +71,7 @@ fun observeLocation(s: CookieState, lat: Double, lon: Double, now: Long): PlaceO
         place.visits++
         s.currentPlaceId = place.id
         if (place.known) s.profile.recordActivity(place.label, now)
+        s.log(now, "lugar", "llegaste a ${place.label}")
     }
     s.profile.markActive(now)
     return PlaceObservation(place, arrived)
@@ -116,6 +117,7 @@ fun learnCalendar(s: CookieState, events: List<CalendarEvent>, now: Long): Int {
         if (key in s.calendarLearned) continue
         s.calendarLearned += key
         s.profile.recordActivity(e.title, e.start)
+        s.log(e.start, "calendario", e.title)
         keywords(e.title).forEach { s.profile.reinforce(it, "palabra", 0.3, e.start) }
         learned++
     }
@@ -138,6 +140,10 @@ data class Health(
     var stepsToday: Long = 0,
     var stepsAvg: Long = 0,
     var lastSync: Long = 0,
+    val heart: MutableList<HeartSample> = mutableListOf(),
+    var lastHeartAt: Long = 0,
+    var restingBpm: Long = 0,
+    var stress: String? = null,
 ) {
     fun lastNight(now: Long): SleepNight? = sleep.lastOrNull { now - it.end < 18 * 3_600_000L }
     fun averageSleepMinutes(): Int = sleep.takeLast(14).map { it.minutes }.average().takeIf { !it.isNaN() }?.toInt() ?: 0
@@ -150,6 +156,8 @@ fun learnSleep(s: CookieState, nights: List<SleepNight>, stepsToday: Long?, step
         s.health.sleep += n
         s.profile.recordActivity("dormir", n.start)
         s.profile.recordActivity("despertar", n.end)
+        s.log(n.start, "sueño", "a dormir (${n.minutes / 60}h ${n.minutes % 60}min)")
+        s.log(n.end, "actividad", "despertar")
         learned++
     }
     while (s.health.sleep.size > 60) s.health.sleep.removeAt(0)
@@ -186,6 +194,7 @@ fun learnApps(s: CookieState, sessions: List<AppSession>, now: Long): Int {
         stat.hourMinutes[zoned(x.start).hour] += min.toInt().coerceAtLeast(1)
         stat.category = x.category ?: stat.category
         stat.lastUsed = x.end
+        if (min >= 10) s.log(x.start, "app", "${x.label} ${min.toInt()} min")
         activeHours += x.start / 3_600_000
         learned++
     }

@@ -33,9 +33,32 @@ data class CookieState(
     val style: MutableList<StyleExample> = mutableListOf(),
     val quiz: MutableList<QuizRound> = mutableListOf(),
     val actions: MutableList<PendingAction> = mutableListOf(),
-    // Avisos ya dados (clave → cuándo)
+    // Avisos ya dados (clave → cuándo) y lo útiles que te resultan
     val nudged: MutableMap<String, Long> = mutableMapOf(),
+    val nudgeStats: MutableMap<String, NudgeStat> = mutableMapOf(),
+    val recentNudges: MutableList<NudgeRecord> = mutableListOf(),
+    // v3: mente
+    val timeline: MutableList<TimelineEvent> = mutableListOf(),
+    val days: MutableList<DayEntry> = mutableListOf(),
+    val selfModels: MutableList<SelfModel> = mutableListOf(),
+    val digestQueue: MutableList<String> = mutableListOf(),
+    // v3: mundo
+    var weather: Weather? = null,
+    val travel: MutableList<TravelEstimate> = mutableListOf(),
+    // v3: autonomía
+    val missions: MutableList<Mission> = mutableListOf(),
+    val autonomy: MutableMap<String, String> = mutableMapOf(),
+    val fidelity: MutableList<FidelityRun> = mutableListOf(),
+    // v3: sentidos
+    val contacts: MutableMap<String, Contact> = mutableMapOf(),
+    val photoDays: MutableMap<String, Int> = mutableMapOf(),
+    var lastPhotoSync: Long = 0,
+    var onboarded: Boolean = false,
 )
+
+/** Un aviso que se mostró, para que puedas decir si te sirvió. */
+@Serializable
+data class NudgeRecord(val key: String, val title: String, val text: String, val at: Long, var feedback: Int = 0)
 
 /** Cómo se guarda el estado en disco (permite cifrarlo). */
 interface Codec {
@@ -104,10 +127,11 @@ class Engine(
             "lugar" -> p.location = s.value
             "trabajo" -> { p.occupation = s.value; p.reinforce(s.value, "trabajo", 3.0, t) }
             "rechazo" -> p.dislike(s.value, t)
-            "actividad" -> { p.recordActivity(s.value, t); p.reinforce(s.value, "actividad", 1.0, t) }
+            "actividad" -> { p.recordActivity(s.value, t); p.reinforce(s.value, "actividad", 1.0, t); log(t, "actividad", s.value) }
             else -> p.reinforce(s.value, s.kind, signalWeights[s.kind] ?: 0.3, t)
         }
         p.addDiary(text)
+        log(t, "dijo", text)
         p.observations++
         p.markActive(t)
         signals
@@ -174,7 +198,7 @@ class Engine(
         profile.markActive(t)
     }
 
-    suspend fun learnSpotify(s: SpotifySnapshot): Int = edit { learnFromSpotify(profile, s, now()) }
+    suspend fun learnSpotify(s: SpotifySnapshot): Int = edit { learnFromSpotify(profile, s, now(), this) }
 
     suspend fun disconnectSpotify() = edit { profile.music.connected = false; profile.music.nowPlaying = null }
 
@@ -244,12 +268,108 @@ class Engine(
     fun action(id: String) = state.actions.firstOrNull { it.id == id }?.copy()
 
     /** Avisos nuevos para este momento; quedan marcados para no repetirlos. */
-    suspend fun takeNudges(arrivedAt: Place? = null): List<Nudge> = edit {
+    suspend fun takeNudges(arrivedAt: Place? = null, rng: kotlin.random.Random = kotlin.random.Random.Default): List<Nudge> = edit {
         val t = now()
-        val list = nudges(this, t, arrivedAt)
-        list.forEach { nudged[it.key] = t }
+        val list = nudges(this, t, arrivedAt).filter { shouldShowNudge(nudgeStats, it.key, t, rng) }
+        list.forEach {
+            nudged[it.key] = t
+            nudgeStats.getOrPut(nudgeStatKey(it.key, t)) { NudgeStat() }.shown++
+            recentNudges += NudgeRecord(it.key, it.title, it.text, t)
+            log(t, "aviso", it.title)
+        }
+        while (recentNudges.size > 50) recentNudges.removeAt(0)
         nudged.entries.removeAll { t - it.value > 3L * 24 * 3600 * 1000 }
         list
+    }
+
+    /** "Me sirvió" / "no me sirvió" sobre un aviso: ajusta cuándo y cuánto te avisa. */
+    suspend fun nudgeFeedback(key: String, useful: Boolean) = edit {
+        val rec = recentNudges.lastOrNull { it.key == key }
+        if (rec == null || rec.feedback != 0) return@edit
+        rec.feedback = if (useful) 1 else -1
+        val st = nudgeStats.getOrPut(nudgeStatKey(key, rec.at)) { NudgeStat() }
+        if (useful) st.useful++ else st.useless++
+    }
+
+    // ==================== MENTE ====================
+
+    suspend fun queueDigest(text: String) = edit { digestQueue += text.take(1000); while (digestQueue.size > 40) digestQueue.removeAt(0) }
+
+    suspend fun takeDigestQueue(): List<String> = edit { val l = digestQueue.toList(); digestQueue.clear(); l }
+
+    suspend fun addDay(e: DayEntry) = edit {
+        days.removeAll { it.date == e.date }
+        days += e
+        while (days.size > 400) days.removeAt(0)
+        memories.remember("diario", "${e.date}: ${e.summary}", now(), "diario", e.highlights.take(4))
+    }
+
+    suspend fun addSelfModel(m: SelfModel) = edit {
+        selfModels += m
+        while (selfModels.size > 60) selfModels.removeAt(0)
+    }
+
+    fun daysToWrite(): List<java.time.LocalDate> {
+        val today = zoned(now()).toLocalDate()
+        return (1..3).map { today.minusDays(it.toLong()) }
+            .filter { d -> state.days.none { it.date == d.toString() } && hasDayMaterial(state, d) }
+    }
+
+    fun reflectionDue() = state.memories.size >= 10 &&
+        now() - (state.selfModels.lastOrNull()?.at ?: 0) >= REFLECTION_EVERY_MS
+
+    // ==================== MUNDO ====================
+
+    suspend fun setWeather(w: Weather) = edit { weather = w }
+
+    suspend fun setTravel(t: TravelEstimate) = edit {
+        travel.removeAll { it.eventKey == t.eventKey }
+        travel += t
+        travel.removeAll { now() - it.at > 24 * 3_600_000L }
+    }
+
+    // ==================== AUTONOMÍA ====================
+
+    suspend fun addMission(goal: String, plan: List<String> = emptyList()): Mission = edit {
+        val m = Mission(goal = goal.trim(), plan = plan, nextCheck = now())
+        missions += m
+        memories.remember("meta", goal, now(), "misión")
+        log(now(), "misión", "nueva misión: $goal")
+        m.copy()
+    }
+
+    suspend fun setMissionStatus(id: String, status: String) = edit { missions.firstOrNull { it.id == id }?.status = status }
+
+    suspend fun reportMission(id: String, r: MissionReport) = edit {
+        missions.firstOrNull { it.id == id }?.let { applyMissionReport(it, r, now()); log(now(), "misión", r.update.take(120)) }
+    }
+
+    suspend fun setAutonomy(type: String, level: String) = edit { autonomy[type] = level }
+
+    fun automatic(type: String) = isAutomatic(state, type)
+
+    suspend fun addFidelity(r: FidelityRun) = edit { fidelity += r; while (fidelity.size > 100) fidelity.removeAt(0) }
+
+    // ==================== SENTIDOS v3 ====================
+
+    suspend fun learnMovement(type: String, at: Long = now()) = edit { learnMovement(this, type, at) }
+
+    suspend fun learnNotification(app: String, sender: String?, text: String?, at: Long = now()) =
+        edit { learnNotification(this, app, sender, text, at) }
+
+    suspend fun learnPhotos(photos: List<PhotoInfo>) = edit { learnPhotos(this, photos, now()) }
+
+    suspend fun learnHeart(samples: List<HeartSample>) = edit { learnHeart(this, samples, now()) }
+
+    suspend fun setOnboarded() = edit { onboarded = true }
+
+    // ==================== COPIA DE SEGURIDAD ====================
+
+    fun exportJson(): String = json.encodeToString(CookieState.serializer(), state)
+
+    suspend fun importJson(text: String) = mutex.withLock {
+        state = json.decodeFromString(CookieState.serializer(), text)
+        save()
     }
 
     /** Borra todo lo que Cookie sabe de ti. */

@@ -135,7 +135,7 @@ class SensesTest {
         e.addQuiz(QuizRound("¿Pizza o tacos?", "pizza", "tacos siempre", 0.0, "Prefiero tacos antes que pizza"))
         val s = e.current()
         val ctx = TwinContext(s.profile, s.memories, s.style, s.places, s.upcoming, s.health, emptyList(), listOf("light.salon (Salón: off)"))
-        val sys = twinSystem(ctx)
+        val sys = twinSystem(ctx).let { it.stable + it.volatile }
         assertTrue(sys.contains("Ana") && sys.contains("mejor el finde") && sys.contains("tacos") && sys.contains("light.salon"))
         assertEquals(0, twinSimilarity(s))
         assertTrue(describeContext(ctx).contains("Dispositivos"))

@@ -63,6 +63,14 @@ class Settings(context: Context) {
     var senseHealth by flag("sense_health", false)
     var senseApps by flag("sense_apps", false)
     var learnWithClaude by flag("learn_with_claude", true)
+    var senseMovement by flag("sense_movement", false)
+    var senseNotifications by flag("sense_notifications", false)
+    var sensePhotos by flag("sense_photos", false)
+    var handsFree by flag("hands_free", false)
+    var conversationMode by flag("conversation_mode", false)
+
+    // Google Routes (tráfico real, opcional)
+    var mapsKey by secret("maps_key")
 
     val hasClaude get() = claudeKey.isNotBlank()
     val spotifyConnected get() = spotifyRefresh != null

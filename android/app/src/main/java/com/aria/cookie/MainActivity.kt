@@ -6,8 +6,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings as AndroidSettings
-import android.speech.RecognizerIntent
-import android.speech.tts.TextToSpeech
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -22,36 +20,54 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.health.connect.client.PermissionController
-import androidx.lifecycle.lifecycleScope
 import com.aria.cookie.ui.CookieRoot
 import com.aria.cookie.ui.CookieTheme
 import com.aria.cookie.ui.LockedScreen
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
-import java.util.Locale
 
 /** Lo que la interfaz puede pedirle al sistema. */
 interface Platform {
     fun openUrl(url: String)
     fun connectSpotify()
     fun listen(onText: (String) -> Unit)
+    fun startConversation()
+    fun stopConversation()
+    val conversationActive: Boolean
+    val partialSpeech: String
+    fun setHandsFree(on: Boolean)
     fun requestCalendar()
     fun requestLocation()
     fun requestBackgroundLocation()
     fun requestHealth()
     fun openUsageAccess()
+    fun requestMovement()
+    fun requestPhotos()
+    fun openNotificationAccess()
     fun confirmAction(id: String)
+    fun exportBackup(password: String)
+    fun importBackup(password: String)
+    fun shareDiagnostics()
 }
 
 class MainActivity : FragmentActivity(), Platform {
     private val vm: MainViewModel by viewModels()
-    private var tts: TextToSpeech? = null
     private var unlocked by mutableStateOf(false)
-    private var pendingVoice: ((String) -> Unit)? = null
-    /** Se pide dictar al abrir desde el widget. */
     private var startVoice by mutableStateOf(false)
+    override var conversationActive by mutableStateOf(false)
+        private set
+    override var partialSpeech by mutableStateOf("")
+        private set
+    private var pendingVoice: ((String) -> Unit)? = null
+    private var backupPassword: String? = null
+    private var afterMic: (() -> Unit)? = null
+
+    private lateinit var voice: CookieVoice
+    private lateinit var listener: Listener
 
     private val askNotifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+    private val askMic = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) afterMic?.invoke() else vm.toast.value = "Necesito el micrófono para escucharte"
+        afterMic = null
+    }
     private val askCalendar = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { r ->
         vm.update { senseCalendar = r[Manifest.permission.READ_CALENDAR] == true }
         if (vm.settings.senseCalendar) vm.senseNow()
@@ -65,22 +81,44 @@ class MainActivity : FragmentActivity(), Platform {
         vm.update { senseHealth = granted.isNotEmpty() }
         if (granted.isNotEmpty()) vm.senseNow()
     }
-    private val speech = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        val text = r.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        if (!text.isNullOrBlank()) pendingVoice?.invoke(text)
-        pendingVoice = null
+    private val askMovement = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        vm.update { senseMovement = ok }
+        if (ok) Sensors.startActivityRecognition(this)
+    }
+    private val askPhotos = registerForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        vm.update { sensePhotos = ok }
+        if (ok) vm.senseNow()
+    }
+    private val createBackup = registerForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val pw = backupPassword
+        backupPassword = null
+        if (uri != null && pw != null) vm.exportBackup(this, uri, pw)
+    }
+    private val openBackup = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val pw = backupPassword
+        backupPassword = null
+        if (uri != null && pw != null) vm.importBackup(this, uri, pw)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         if (Build.VERSION.SDK_INT >= 33) askNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
-        tts = TextToSpeech(this) { status -> if (status == TextToSpeech.SUCCESS) tts?.language = Locale("es") }
-        lifecycleScope.launch { vm.speak.collectLatest { text -> text?.let { say(it); vm.speak.value = null } } }
+
+        // Voz: habla frase a frase lo que llega en streaming; al terminar, vuelve a escuchar (modo conversación).
+        voice = CookieVoice(this) { runOnUiThread { if (conversationActive && !vm.twinThinking.value) listener.start() } }
+        listener = Listener(this, onPartial = { partialSpeech = it }, onFinal = { text ->
+            partialSpeech = ""
+            listener.stop()
+            vm.sendToTwin(text, spoken = true)
+        })
+        vm.voiceSink = { runOnUiThread { voice.feed(it) } }
+        vm.voiceDone = { runOnUiThread { voice.flush() } }
 
         unlocked = !vm.settings.biometricLock
         if (!unlocked) authenticate()
         handleIntent(intent)
+        if (vm.settings.handsFree && hasMic()) HandsFreeService.start(this)
 
         setContent {
             CookieTheme {
@@ -97,11 +135,19 @@ class MainActivity : FragmentActivity(), Platform {
 
     override fun onResume() {
         super.onResume()
-        vm.bumpSettings() // por si concediste el acceso a uso de apps en Ajustes del sistema
+        vm.bumpSettings() // por si concediste accesos en los ajustes del sistema
+    }
+
+    override fun onPause() {
+        stopConversation()
+        super.onPause()
     }
 
     override fun onDestroy() {
-        tts?.shutdown()
+        listener.destroy()
+        voice.shutdown()
+        vm.voiceSink = null
+        vm.voiceDone = null
         super.onDestroy()
     }
 
@@ -129,7 +175,7 @@ class MainActivity : FragmentActivity(), Platform {
     private fun authenticate() {
         val auth = BiometricManager.Authenticators.BIOMETRIC_WEAK or BiometricManager.Authenticators.DEVICE_CREDENTIAL
         if (BiometricManager.from(this).canAuthenticate(auth) != BiometricManager.BIOMETRIC_SUCCESS) {
-            unlocked = true // el teléfono no tiene bloqueo configurado
+            unlocked = true
             return
         }
         BiometricPrompt(this, ContextCompat.getMainExecutor(this), object : BiometricPrompt.AuthenticationCallback() {
@@ -145,20 +191,45 @@ class MainActivity : FragmentActivity(), Platform {
 
     // ==================== VOZ ====================
 
-    private fun say(text: String) {
-        tts?.speak(text.replace(Regex("[*_#>`]"), ""), TextToSpeech.QUEUE_FLUSH, null, "cookie")
+    private fun hasMic() = Sensors.granted(this, Manifest.permission.RECORD_AUDIO)
+
+    private fun withMic(block: () -> Unit) {
+        if (hasMic()) block() else { afterMic = block; askMic.launch(Manifest.permission.RECORD_AUDIO) }
     }
 
-    override fun listen(onText: (String) -> Unit) {
+    /** Dicta una sola frase (sin ventanas del sistema). */
+    override fun listen(onText: (String) -> Unit) = withMic {
         pendingVoice = onText
-        runCatching {
-            speech.launch(
-                Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    .putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
-                    .putExtra(RecognizerIntent.EXTRA_PROMPT, "Háblale a tu copia")
-            )
-        }.onFailure { vm.toast.value = "Tu teléfono no tiene reconocimiento de voz" }
+        Listener(this, onPartial = { partialSpeech = it }, onFinal = { t ->
+            partialSpeech = ""
+            pendingVoice?.invoke(t)
+            pendingVoice = null
+        }).also { l -> l.start(); lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
+            override fun onPause(owner: androidx.lifecycle.LifecycleOwner) = l.destroy()
+        }) }
+    }
+
+    /** Conversación continua: hablas, te responde en voz y vuelve a escucharte. */
+    override fun startConversation() = withMic {
+        conversationActive = true
+        voice.say("Te escucho")
+    }
+
+    override fun stopConversation() {
+        conversationActive = false
+        partialSpeech = ""
+        if (::listener.isInitialized) listener.stop()
+        if (::voice.isInitialized) voice.stop()
+    }
+
+    override fun setHandsFree(on: Boolean) {
+        if (on) withMic {
+            vm.update { handsFree = true }
+            HandsFreeService.start(this)
+        } else {
+            vm.update { handsFree = false }
+            HandsFreeService.stop(this)
+        }
     }
 
     // ==================== PERMISOS ====================
@@ -168,7 +239,6 @@ class MainActivity : FragmentActivity(), Platform {
 
     override fun requestBackgroundLocation() {
         if (Build.VERSION.SDK_INT >= 30) {
-            // Android pide activarlo en Ajustes: "Permitir todo el tiempo".
             startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)))
         } else if (Build.VERSION.SDK_INT == 29) {
             askBackgroundLocation.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
@@ -177,7 +247,7 @@ class MainActivity : FragmentActivity(), Platform {
 
     override fun requestHealth() {
         if (!Sensors.healthAvailable(this)) {
-            vm.toast.value = "Instala o actualiza Health Connect para compartir tu sueño y tus pasos"
+            vm.toast.value = "Instala o actualiza Health Connect para compartir tu sueño, pasos y pulso"
             openUrl("https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata")
             return
         }
@@ -189,9 +259,33 @@ class MainActivity : FragmentActivity(), Platform {
         startActivity(Intent(AndroidSettings.ACTION_USAGE_ACCESS_SETTINGS))
     }
 
+    override fun requestMovement() {
+        if (Build.VERSION.SDK_INT >= 29) askMovement.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+        else { vm.update { senseMovement = true }; Sensors.startActivityRecognition(this) }
+    }
+
+    override fun requestPhotos() = askPhotos.launch(Sensors.photoPermission)
+
+    override fun openNotificationAccess() {
+        vm.update { senseNotifications = true }
+        startActivity(Intent(AndroidSettings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+    }
+
     // ==================== OTROS ====================
 
     override fun confirmAction(id: String) = vm.confirmAction(this, id)
+
+    override fun exportBackup(password: String) {
+        backupPassword = password
+        createBackup.launch("cookie-${java.time.LocalDate.now()}.cookie")
+    }
+
+    override fun importBackup(password: String) {
+        backupPassword = password
+        openBackup.launch(arrayOf("*/*"))
+    }
+
+    override fun shareDiagnostics() = CrashLog.share(this)
 
     override fun connectSpotify() {
         vm.spotifyLoginUrl()?.let(::openUrl)

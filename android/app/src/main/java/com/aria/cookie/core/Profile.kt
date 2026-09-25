@@ -204,7 +204,9 @@ internal fun isLeadingFiller(w: String) = w in leadingFiller
 fun normalizeTopic(s: String): String {
     var words = s.lowercase().trim().trim(' ', '.', ',', ';', ':', '!', '¡', '?', '¿', '"', '\'', '(', ')', '[', ']')
         .split(Regex("\\s+")).filter { it.isNotEmpty() }
-    while (words.isNotEmpty() && words.first() in leadingFiller) words = words.drop(1)
-    while (words.isNotEmpty() && words.last() in trailingFiller) words = words.dropLast(1)
+    // Quita relleno ("el", "mucho"...) pero nunca la única palabra ("leer" sigue siendo "leer").
+    while (words.size > 1 && words.first() in leadingFiller) words = words.drop(1)
+    while (words.size > 1 && words.last() in trailingFiller) words = words.dropLast(1)
+    if (words.size == 1 && words[0] in leadingFiller && words[0].length <= 3) return ""
     return words.take(4).joinToString(" ")
 }

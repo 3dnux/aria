@@ -204,7 +204,7 @@ private fun JsonObject.str(key: String): String? =
  * investigar: conciertos, lanzamientos...), y cada reproducción enseña a
  * Cookie a qué horas estás despierto y qué escuchas en cada momento.
  */
-fun learnFromSpotify(p: Profile, s: SpotifySnapshot, now: Long): Int {
+fun learnFromSpotify(p: Profile, s: SpotifySnapshot, now: Long, state: CookieState? = null): Int {
     val m = p.music
     m.connected = true
     m.spotifyName = s.displayName ?: m.spotifyName
@@ -232,6 +232,7 @@ fun learnFromSpotify(p: Profile, s: SpotifySnapshot, now: Long): Int {
             byArtist[play.artist] = (byArtist[play.artist] ?: 0) + 1
         }
         m.lastPlayedAt = play.playedAt
+        if (play.artist.isNotBlank()) (state?.log(play.playedAt, "música", play.artist))
         learned++
     }
     m.lastSync = now

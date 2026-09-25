@@ -16,6 +16,7 @@ import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.request.AggregateRequest
@@ -23,6 +24,8 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.aria.cookie.core.AppSession
 import com.aria.cookie.core.CalendarEvent
+import com.aria.cookie.core.HeartSample
+import com.aria.cookie.core.PhotoInfo
 import com.aria.cookie.core.SleepNight
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
@@ -99,11 +102,12 @@ object Sensors {
     val healthPermissions = setOf(
         HealthPermission.getReadPermission(SleepSessionRecord::class),
         HealthPermission.getReadPermission(StepsRecord::class),
+        HealthPermission.getReadPermission(HeartRateRecord::class),
     )
 
     fun healthAvailable(ctx: Context) = HealthConnectClient.getSdkStatus(ctx) == HealthConnectClient.SDK_AVAILABLE
 
-    data class HealthData(val nights: List<SleepNight>, val stepsToday: Long?, val stepsAvg: Long?)
+    data class HealthData(val nights: List<SleepNight>, val stepsToday: Long?, val stepsAvg: Long?, val heart: List<HeartSample> = emptyList())
 
     suspend fun readHealth(ctx: Context): HealthData? {
         if (!healthAvailable(ctx)) return null
@@ -127,7 +131,11 @@ object Sensors {
             )[StepsRecord.COUNT_TOTAL]
             avg = week?.div(7)
         }
-        return HealthData(nights, today, avg)
+        val heart = if (HealthPermission.getReadPermission(HeartRateRecord::class) in granted) {
+            client.readRecords(ReadRecordsRequest(HeartRateRecord::class, TimeRangeFilter.between(now.minusSeconds(2 * 86_400L), now)))
+                .records.flatMap { r -> r.samples.map { HeartSample(it.time.toEpochMilli(), it.beatsPerMinute) } }
+        } else emptyList()
+        return HealthData(nights, today, avg, heart)
     }
 
     // ==================== USO DE APPS ====================
@@ -181,4 +189,54 @@ object Sensors {
         ApplicationInfo.CATEGORY_PRODUCTIVITY -> "productividad"
         else -> null
     }
+
+    // ==================== FOTOS ====================
+
+    val photoPermission get() = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
+
+    /** Solo la fecha de cada foto (no se lee la imagen). */
+    fun readPhotos(ctx: Context, since: Long): List<PhotoInfo> {
+        if (!granted(ctx, photoPermission)) return emptyList()
+        val from = maxOf(since, System.currentTimeMillis() - 30 * 86_400_000L)
+        val out = mutableListOf<PhotoInfo>()
+        ctx.contentResolver.query(
+            android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            arrayOf(android.provider.MediaStore.Images.Media.DATE_TAKEN),
+            "${android.provider.MediaStore.Images.Media.DATE_TAKEN} > ?", arrayOf(from.toString()),
+            "${android.provider.MediaStore.Images.Media.DATE_TAKEN} ASC",
+        )?.use { c -> while (c.moveToNext()) out += PhotoInfo(c.getLong(0)) }
+        return out
+    }
+
+    // ==================== MOVIMIENTO ====================
+
+    val activityPermission get() = if (Build.VERSION.SDK_INT >= 29) Manifest.permission.ACTIVITY_RECOGNITION else "com.google.android.gms.permission.ACTIVITY_RECOGNITION"
+
+    /** Pide al sistema que avise cuando empiezas a caminar, correr, ir en bici o en coche. */
+    @SuppressLint("MissingPermission")
+    fun startActivityRecognition(ctx: Context): Boolean {
+        if (Build.VERSION.SDK_INT >= 29 && !granted(ctx, Manifest.permission.ACTIVITY_RECOGNITION)) return false
+        val types = listOf(
+            com.google.android.gms.location.DetectedActivity.WALKING, com.google.android.gms.location.DetectedActivity.RUNNING,
+            com.google.android.gms.location.DetectedActivity.ON_BICYCLE, com.google.android.gms.location.DetectedActivity.IN_VEHICLE,
+        )
+        val transitions = types.map {
+            com.google.android.gms.location.ActivityTransition.Builder().setActivityType(it)
+                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER).build()
+        }
+        val pi = android.app.PendingIntent.getBroadcast(
+            ctx, 5, android.content.Intent(ctx, MovementReceiver::class.java),
+            android.app.PendingIntent.FLAG_MUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        return runCatching {
+            com.google.android.gms.location.ActivityRecognition.getClient(ctx)
+                .requestActivityTransitionUpdates(com.google.android.gms.location.ActivityTransitionRequest(transitions), pi)
+            true
+        }.getOrDefault(false)
+    }
+
+    // ==================== NOTIFICACIONES ====================
+
+    fun hasNotificationAccess(ctx: Context) =
+        androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
 }

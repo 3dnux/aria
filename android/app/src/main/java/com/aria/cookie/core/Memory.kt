@@ -17,10 +17,12 @@ data class Memory(
     val createdAt: Long,
     var lastSeen: Long,
     var mentions: Int = 1,
-    val source: String = "chat", // chat, spotify, calendario, lugar, salud, apps, prueba
+    val source: String = "chat", // chat, spotify, calendario, lugar, salud, apps, prueba, diario, reflexión
+    /** Conceptos y sinónimos para encontrarlo por significado ("mamá" → madre, familia). */
+    var tags: List<String> = emptyList(),
 )
 
-val MEMORY_KINDS = listOf("hecho", "persona", "gusto", "meta", "ánimo", "rutina", "decisión", "estilo")
+val MEMORY_KINDS = listOf("hecho", "persona", "gusto", "meta", "ánimo", "rutina", "decisión", "estilo", "diario")
 
 private const val MAX_MEMORIES = 500
 
@@ -37,13 +39,15 @@ data class MemoryDigest(
 )
 
 @Serializable
-data class MemoryDraft(val kind: String = "hecho", val text: String = "")
+data class MemoryDraft(val kind: String = "hecho", val text: String = "", val tags: List<String> = emptyList())
 
 /**
  * Guarda un recuerdo; si ya existe uno casi igual del mismo tipo lo refuerza
  * en lugar de duplicarlo. Devuelve el recuerdo resultante.
  */
-fun MutableList<Memory>.remember(kind: String, text: String, now: Long, source: String = "chat"): Memory? {
+fun MutableList<Memory>.remember(
+    kind: String, text: String, now: Long, source: String = "chat", tags: List<String> = emptyList(),
+): Memory? {
     val clean = text.trim().trimEnd('.')
     if (clean.length < 3) return null
     val k = if (kind in MEMORY_KINDS) kind else "hecho"
@@ -54,9 +58,11 @@ fun MutableList<Memory>.remember(kind: String, text: String, now: Long, source: 
         same.lastSeen = now
         same.weight += 0.5
         if (clean.length > same.text.length) same.text = clean // la versión más completa gana
+        same.tags = (same.tags + tags).map { it.lowercase().trim() }.filter { it.isNotEmpty() }.distinct().take(12)
         return same
     }
-    val m = Memory(kind = k, text = clean, createdAt = now, lastSeen = now, source = source)
+    val m = Memory(kind = k, text = clean, createdAt = now, lastSeen = now, source = source,
+        tags = tags.map { it.lowercase().trim() }.filter { it.isNotEmpty() }.distinct().take(12))
     add(m)
     if (size > MAX_MEMORIES) {
         // Olvida lo menos importante (como una memoria humana).
@@ -73,13 +79,19 @@ fun Memory.score(now: Long): Double {
     return weight * (1 + mentions * 0.3) * if (durable) 1.0 else exp(-days / 130)
 }
 
-/** Recuerdos relevantes para una pregunta (palabras en común + importancia). */
+/**
+ * Recuerdos relevantes para una pregunta: búsqueda híbrida por significado
+ * (raíces en español + sinónimos + etiquetas + parecido de letras) e importancia.
+ */
 fun List<Memory>.relevant(query: String, now: Long, n: Int = 25): List<Memory> {
-    val q = keywords(query).toSet()
-    return sortedByDescending { m ->
-        val overlap = keywords(m.text).count { it in q }
-        overlap * 2.0 + m.score(now)
-    }.take(n)
+    val q = concepts(query)
+    if (q.isEmpty()) return sortedByDescending { it.score(now) }.take(n)
+    return map { m ->
+        val c = concepts(m.text) + m.tags.flatMap { concepts(it) }
+        val exact = q.count { it in c }
+        val fuzzy = if (exact == 0) q.maxOf { a -> c.maxOfOrNull { b -> trigramSimilarity(a, b) } ?: 0.0 } else 0.0
+        m to (exact * 3.0 + (if (fuzzy > 0.5) fuzzy * 2 else 0.0) + m.score(now) * 0.5)
+    }.sortedByDescending { it.second }.take(n).map { it.first }
 }
 
 private fun similarity(a: Set<String>, b: Set<String>): Double {
@@ -96,5 +108,8 @@ fun applyDigest(s: CookieState, d: MemoryDigest, now: Long) {
     d.likes.forEach { p.reinforce(it, "gusto", 2.0, now) }
     d.dislikes.forEach { p.dislike(it, now) }
     d.activities.forEach { p.recordActivity(it, now); p.reinforce(it, "actividad", 1.0, now) }
-    d.memories.forEach { s.memories.remember(it.kind, it.text, now) }
+    d.memories.forEach { m ->
+        s.memories.remember(m.kind, m.text, now, tags = m.tags)
+        s.log(now, "recuerdo", m.text)
+    }
 }

@@ -1,46 +1,49 @@
 # Cookie para Android 🍪📱
 
-Tu "segunda copia" en el teléfono. Aprende de ti **sin que se lo pidas** (lo que le cuentas, tu Spotify,
-tu agenda, tus lugares, tu sueño y tus apps), **piensa como tú** (recuerdos + tu forma de hablar +
-pruebas de parecido), **se adelanta** a lo que necesitas y **actúa por ti** (música, alarmas,
-recordatorios, eventos, mensajes y casa inteligente) siempre con tu confirmación.
-App nativa en Kotlin + Jetpack Compose; es la evolución del módulo `internal/cookie` (Go) de ARIA.
+Tu **segunda copia**: un gemelo digital que vive cifrado en tu teléfono, aprende de ti sin que se lo
+pidas, piensa como tú (y mide cuánto), se adelanta a lo que necesitas, trabaja tus objetivos por su
+cuenta y actúa por ti con el nivel de autonomía que elijas. Kotlin + Jetpack Compose + Claude.
 
-## Qué hace
+## Qué la hace distinta
 
-| Parte | Cómo |
+| Capa | Qué hace |
 |---|---|
-| **Entenderte** | Cada cosa que le cuentas pasa por Claude, que saca datos y **recuerdos** (hechos, personas, gustos, metas, ánimo, rutinas, decisiones). La memoria se deduplica, refuerza y olvida lo menos importante. La copia busca en ella con una herramienta `buscar_recuerdos`. |
-| **Sentidos** | 📅 Calendario (rutinas + eventos próximos) · 📍 Ubicación (descubre "casa", "trabajo" y tus sitios; guarda solo el centro de cada lugar, no tu recorrido) · 😴 Health Connect (sueño y pasos) · 📱 Uso de apps (tu ritmo real) · 🎧 Spotify (artistas, géneros, qué escuchas a cada hora y en cada lugar). |
-| **Pensar como tú** | Botones "Así diría yo" / "Yo diría…" en cada respuesta → ejemplos de tu estilo. Modo **¿Qué haría yo?**: la copia responde a escondidas, respondes tú, Claude compara y saca una lección. La app muestra el % de parecido. |
-| **Actuar** | La copia usa herramientas: poner música (Spotify API con Premium; si no, abre la app), alarma, recordatorio, evento de calendario, borrador de mensaje (nunca envía por ti), abrir enlace, Home Assistant. Todo queda **pendiente de confirmación**. |
-| **Anticiparse** | Cada 30 min: evento en <75 min (con ruta), dormiste poco, llegaste a un lugar (con la música que sueles poner ahí), rutina de esta hora sin hacer, poco movimiento. Notificaciones con botón "Sí, hazlo". |
-| **Voz y presencia** | Dictado por voz, respuestas leídas en voz alta, widget en la pantalla de inicio con botón de micrófono. |
-| **Seguridad** | Perfil y claves cifrados con AES-GCM y clave del Android Keystore; bloqueo con huella/PIN; "olvidar todo". |
+| 🧠 **Memoria semántica** | Cada cosa que dices se convierte (por lotes, para ahorrar) en recuerdos con etiquetas de significado. La búsqueda es híbrida: raíces en español, sinónimos ("mamá" = "madre"), etiquetas de Claude y parecido de letras. Deduplica, refuerza y olvida como una memoria humana. |
+| 📔 **Diario automático** | Cada noche escribe en primera persona tu día a partir de su **línea de tiempo** (lugares, música, eventos, movimiento, apps, mensajes, sueño, lo que dijiste). |
+| 🪞 **"Quién soy"** | Cada semana relee todo y reescribe tu retrato: valores, cómo decides, cómo hablas, qué te preocupa, qué buscas y **cómo has cambiado** (guarda el historial). La copia habla desde ese retrato. |
+| 🧬 **Fidelidad medible** | "¿Qué haría yo?": la copia responde a escondidas y Claude compara. El **examen** reevalúa a la copia sobre tus respuestas guardadas, sin chuleta (quita de su memoria la respuesta de cada pregunta), y muestra la evolución. |
+| 🔮 **Anticipación que aprende** | Avisos por agenda (con **tráfico real** si pones clave de Google Routes), **clima** (Open-Meteo), sueño, **estrés por pulso**, llegada a lugares, rutina, pasos y misiones. Cada tipo de aviso aprende de tus 👍/👎 con **muestreo de Thompson** por franja horaria: lo inútil se apaga solo y lo útil sale más. Un **predictor bayesiano** aprende qué haces según hora, día y lugar. |
+| 🎯 **Misiones** | Objetivos de días o semanas ("prepara mi maratón"). Un agente con búsqueda web los trabaja en segundo plano: revisa tu contexto, ajusta el plan y propone acciones. La copia puede crearlas sola. |
+| 🤖 **Autonomía por niveles** | Por tipo de acción: preguntar o automático (música, recordatorios, enlaces, casa, alarmas). Los mensajes nunca se envían solos. |
+| 🗣️ **Voz natural** | Streaming de Claude leído **frase a frase mientras se escribe**, mejor voz en español del teléfono, conversación continua sin tocar la pantalla, modo manos libres **"Oye Cookie"** (experimental), responder desde notificaciones y **desde el reloj**. |
+| 👀 **Sentidos** | Spotify, calendario, lugares, Health Connect (sueño, pasos, **pulso**), **movimiento** (caminar/correr/bici/coche), uso de apps, **con quién hablas** (de notificaciones, sin guardar el texto) y **momentos** (días con muchas fotos, solo fechas). |
+| 🔒 **Seguridad** | Estado y claves cifrados con AES-GCM (Android Keystore), bloqueo biométrico, **copia de seguridad cifrada con contraseña** (PBKDF2 + AES-256-GCM) para no perder tu copia, diagnóstico de errores sin datos personales. |
+| ⚡ **Coste y rapidez** | Caché de prompts (la parte estable del sistema), recuerdos por lotes, streaming, entradas de herramientas validadas en el cliente. |
 
 ## Configurar
 
-1. **Claude**: Ajustes → API key (necesaria para recuerdos, copia, acciones y prueba de parecido).
-2. **Spotify**: <https://developer.spotify.com/dashboard> → *Create app* → Redirect URI `ariacookie://spotify-callback` →
-   marca *Web API* → en *User Management* añade tu correo → pega el Client ID en Ajustes.
-   Permisos: lectura + `user-modify-playback-state` (para poner música). Si conectaste una versión anterior, pulsa "Volver a conectar".
-3. **Sentidos**: Ajustes → Mis sentidos. Cada uno pide su permiso (ubicación en segundo plano y uso de apps se activan en los ajustes del sistema; sueño/pasos requieren Health Connect).
-4. **Home Assistant** (opcional): URL y token de larga duración.
-5. Añade el **widget** de Cookie a tu pantalla de inicio.
+La app tiene una bienvenida guiada. Resumen:
 
-## Compilar
+1. **Claude**: API key (cerebro de todo lo avanzado). Modelo por defecto `claude-opus-5`, con *fallback* de servidor si rechaza una petición.
+2. **Spotify**: app en <https://developer.spotify.com/dashboard>, Redirect URI `ariacookie://spotify-callback`, tu correo en *User Management*, Client ID en la app.
+3. **Sentidos**: Ajustes → Mis sentidos (cada uno con su permiso; notificaciones y uso de apps se activan en los ajustes del sistema; salud necesita Health Connect).
+4. Opcional: **Google Routes API key** (tráfico), **Home Assistant** (URL + token), **widget**, **manos libres**.
+
+## Compilar y probar
 
 ```bash
 cd android
-./gradlew :app:assembleDebug          # → app/build/outputs/apk/debug/app-debug.apk
-./gradlew :app:testDebugUnitTest      # tests del núcleo
+./gradlew :app:testDebugUnitTest          # núcleo (JVM)
+./gradlew :app:connectedDebugAndroidTest  # en un emulador/teléfono conectado
+./gradlew :app:assembleDebug              # → app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Requiere JDK 17+ y Android SDK con la plataforma 36 (Health Connect lo exige). En GitHub, el workflow
-**Android APK** compila y publica el APK como artefacto `cookie-apk` (variable opcional `SPOTIFY_CLIENT_ID`).
+Requiere JDK 17+ y Android SDK con plataforma 36. En GitHub, el workflow **Android APK** ejecuta los tests,
+publica el APK (`cookie-apk`) y lanza las pruebas en un emulador.
 
-## Privacidad
+## Límites honestos
 
-Todo vive cifrado en el teléfono. Solo sale: búsquedas a Google News, llamadas a Spotify / Home Assistant
-y, si pones tu clave, lo necesario a Claude (`claude-opus-5`, con *fallback* de servidor si rechaza una
-petición) para entenderte, investigar y responder como tú. Tu copia no envía mensajes ni actúa sin tu "sí".
+- Pensado para instalar directamente (APK). Google Play pone muchas restricciones a la ubicación en segundo plano, el uso de apps, las notificaciones y la salud.
+- El modo manos libres usa el reconocedor del sistema: gasta batería y en algunos teléfonos suena al reiniciarse.
+- Lectura de salud en segundo plano limitada por Android: se actualiza al abrir la app.
+- El tráfico real necesita tu clave de Google (de pago por uso).

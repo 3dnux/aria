@@ -5,15 +5,20 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.aria.cookie.core.Backup
 import com.aria.cookie.core.ChatMessage
 import com.aria.cookie.core.CookieState
+import com.aria.cookie.core.DayEntry
 import com.aria.cookie.core.QuizRound
 import com.aria.cookie.core.SpotifyAuth
+import com.aria.cookie.core.dayContext
+import com.aria.cookie.core.reflectionContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
 /** Estado de una ronda de "¿qué haría yo?". */
 data class QuizUi(
@@ -32,9 +37,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val toast = MutableStateFlow<String?>(null)
     val busy = MutableStateFlow(false)
     val twinThinking = MutableStateFlow(false)
+    /** Respuesta de la copia mientras se escribe (streaming). */
+    val streaming = MutableStateFlow("")
     val quiz = MutableStateFlow(QuizUi())
-    /** Última respuesta de la copia, para leerla en voz alta. */
-    val speak = MutableStateFlow<String?>(null)
+    /** Voz: recibe trozos de texto para hablarlos al vuelo y el aviso de fin. */
+    var voiceSink: ((String) -> Unit)? = null
+    var voiceDone: (() -> Unit)? = null
     private val _settingsVersion = MutableStateFlow(0)
     val settingsVersion: StateFlow<Int> = _settingsVersion
 
@@ -42,6 +50,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             engine.touch()
             runCatching { cookie.senseAll() }
+            runCatching { cookie.worldWork() }
             CookieWidget.refresh(cookie)
         }
     }
@@ -52,6 +61,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 toast.value = block()
             } catch (e: Exception) {
+                CrashLog.write("ui", e.toString())
                 toast.value = "⚠️ ${e.message}"
             } finally {
                 busy.value = false
@@ -77,6 +87,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun senseNow() = work {
         val arrived = cookie.senseAll()
+        cookie.worldWork()
         engine.takeNudges(arrived).forEach { cookie.notifyNudge(it) }
         CookieWidget.refresh(cookie)
         "👀 Actualicé lo que sé de ti"
@@ -87,36 +98,32 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (useful) "👍 Buscaré más como esto" else "👎 Te mostraré menos de esto"
     }
 
+    fun nudgeFeedback(key: String, useful: Boolean) = work {
+        engine.nudgeFeedback(key, useful)
+        if (useful) "👍 Te avisaré más de esto" else "👎 Te avisaré menos de esto"
+    }
+
     fun forget(topic: String) = work { engine.forget(topic); "🧹 Olvidé «$topic»" }
     fun forgetMemory(id: String) = work { engine.forgetMemory(id); "🧹 Recuerdo borrado" }
     fun renamePlace(id: String, label: String) = work { engine.renamePlace(id, label); "📍 Ahora sé que es «$label»" }
 
     // ==================== TU COPIA ====================
 
-    /** Habla con tu copia. Lo que le cuentas también la enseña. */
-    fun sendToTwin(text: String) {
+    /** Habla con tu copia; la respuesta llega en streaming (y en voz si [spoken]). */
+    fun sendToTwin(text: String, spoken: Boolean = settings.speakReplies) {
         if (text.isBlank()) return
         viewModelScope.launch {
-            engine.addChat(ChatMessage(fromUser = true, text = text.trim()))
-            launch { runCatching { cookie.learnDeep(text) } } // aprende en paralelo
-            if (!settings.hasClaude) {
-                engine.addChat(ChatMessage(false, "Para hablar necesito tu clave de Claude (Ajustes). Mientras tanto, ya aprendí de lo que me dijiste. 🍪"))
-                return@launch
-            }
             twinThinking.value = true
+            streaming.value = ""
             try {
-                val history = engine.current().chat.toList()
-                val ctx = cookie.twinContext(text)
-                val reply = withContext(Dispatchers.IO) {
-                    cookie.brain().twin(ctx, history) { q -> engine.relevantMemories(q, 12) }
+                cookie.askTwin(text) { delta ->
+                    streaming.value += delta
+                    if (spoken) voiceSink?.invoke(delta)
                 }
-                val ids = reply.actions.map { engine.proposeAction(it).id }
-                engine.addChat(ChatMessage(false, reply.text, actions = ids))
-                if (settings.speakReplies) speak.value = reply.text
-            } catch (e: Exception) {
-                engine.addChat(ChatMessage(false, "⚠️ No pude responder: ${e.message}"))
             } finally {
+                streaming.value = ""
                 twinThinking.value = false
+                if (spoken) voiceDone?.invoke()
             }
         }
     }
@@ -127,14 +134,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         return chat.take(i.coerceAtLeast(0)).lastOrNull { it.fromUser }?.text.orEmpty()
     }
 
-    /** "Sí, así hablo yo": la respuesta se vuelve ejemplo de tu estilo. */
     fun approveTwin(m: ChatMessage) = work {
         engine.addStyle(promptBefore(m), m.text)
         engine.markApproved(m.at)
         "✅ Anotado: así hablas tú"
     }
 
-    /** "Yo lo diría así": tu versión enseña a la copia. */
     fun correctTwin(m: ChatMessage, better: String) = work {
         if (better.isBlank()) return@work null
         engine.addStyle(promptBefore(m), better)
@@ -151,8 +156,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val (q, guess) = withContext(Dispatchers.IO) {
                     val brain = cookie.brain()
                     val q = brain.quizQuestion(ctx, engine.current().quiz.map { it.question })
-                    val relevant = ctx.copy(memories = engine.relevantMemories(q))
-                    q to brain.guess(relevant, q)
+                    q to brain.guess(ctx.copy(memories = engine.relevantMemories(q)), q)
                 }
                 quiz.value = QuizUi(question = q, guess = guess, last = quiz.value.last)
             } catch (e: Exception) {
@@ -171,7 +175,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val (score, lesson) = withContext(Dispatchers.IO) { cookie.brain().judge(q.question, q.guess, answer) }
                 val round = QuizRound(q.question, q.guess, answer, score, lesson)
                 engine.addQuiz(round)
-                cookie.learnDeep(answer)
+                cookie.learnDeep(answer, now = false)
                 quiz.value = QuizUi(last = round)
             } catch (e: Exception) {
                 quiz.value = q.copy(loading = false)
@@ -182,7 +186,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun closeQuiz() { quiz.value = QuizUi() }
 
-    // ==================== ACCIONES ====================
+    fun evaluateFidelity() = work {
+        val r = cookie.evaluateFidelity()
+        "🧬 Examen de tu copia: ${(r.score * 100).toInt()}% de parecido en ${r.questions} preguntas"
+    }
+
+    // ==================== MENTE ====================
+
+    fun reflectNow() = work {
+        if (!settings.hasClaude) return@work "La reflexión necesita tu clave de Claude"
+        cookie.flushDigest()
+        val m = withContext(Dispatchers.IO) { cookie.brain().reflect(reflectionContext(engine.current(), System.currentTimeMillis())) }
+        engine.addSelfModel(m)
+        "🪞 Actualicé tu retrato «Quién soy»"
+    }
+
+    fun writeToday() = work {
+        if (!settings.hasClaude) return@work "El diario necesita tu clave de Claude"
+        val today = LocalDate.now()
+        val d = withContext(Dispatchers.IO) { cookie.brain().writeDay(dayContext(engine.current(), today)) }
+        if (d.summary.isBlank()) return@work "Aún no pasó suficiente hoy para escribir"
+        engine.addDay(DayEntry(today.toString(), d.summary, d.mood, d.highlights))
+        "📔 Escribí tu día"
+    }
+
+    // ==================== MISIONES Y AUTONOMÍA ====================
+
+    fun createMission(goal: String) = work {
+        if (goal.isBlank()) return@work null
+        engine.addMission(goal)
+        if (settings.hasClaude) cookie.mindWork()
+        "🎯 Misión creada: la trabajaré por mi cuenta"
+    }
+
+    fun setMissionStatus(id: String, status: String) = work { engine.setMissionStatus(id, status); "Misión $status" }
+
+    fun setAutonomy(type: String, auto: Boolean) = work {
+        engine.setAutonomy(type, if (auto) com.aria.cookie.core.AUTO else com.aria.cookie.core.ASK)
+        if (auto) "Ahora lo haré sin preguntar" else "Te preguntaré antes"
+    }
 
     fun confirmAction(ctx: Context, id: String) = work {
         val a = engine.action(id) ?: return@work "Esa acción ya no existe"
@@ -197,6 +239,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun cancelAction(id: String) = work { engine.setActionStatus(id, "cancelada"); "Cancelado" }
+
+    // ==================== COPIA DE SEGURIDAD ====================
+
+    fun exportBackup(ctx: Context, uri: Uri, password: String) = work {
+        val data = withContext(Dispatchers.Default) { Backup.encrypt(engine.exportJson(), password) }
+        withContext(Dispatchers.IO) { ctx.contentResolver.openOutputStream(uri)?.use { it.write(data) } ?: error("No pude escribir el archivo") }
+        "💾 Copia cifrada guardada. Guarda bien la contraseña."
+    }
+
+    fun importBackup(ctx: Context, uri: Uri, password: String) = work {
+        val data = withContext(Dispatchers.IO) { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: error("No pude leer el archivo") }
+        val json = withContext(Dispatchers.Default) { Backup.decrypt(data, password) }
+        engine.importJson(json)
+        "♻️ Tu copia volvió: restauré todo lo que sabía de ti"
+    }
 
     // ==================== SPOTIFY ====================
 
@@ -244,15 +301,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         bumpSettings()
     }
 
-    fun saveSettings(clientId: String, claudeKey: String, model: String, homeUrl: String, homeToken: String) {
+    fun saveSettings(clientId: String, claudeKey: String, model: String, homeUrl: String, homeToken: String, mapsKey: String) {
         settings.spotifyClientId = clientId
         settings.claudeKey = claudeKey
         settings.claudeModel = model
         settings.homeUrl = homeUrl
         settings.homeToken = homeToken
+        settings.mapsKey = mapsKey
         bumpSettings()
         toast.value = "Ajustes guardados"
     }
+
+    fun finishOnboarding() = work { engine.setOnboarded(); null }
 
     fun wipeAll() = work {
         engine.wipe()
