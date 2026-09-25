@@ -4,6 +4,7 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.rule.GrantPermissionRule
 import com.aria.cookie.core.Engine
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -16,7 +17,13 @@ import java.io.File
 /** Prueba en un teléfono/emulador real: la app arranca y el cifrado del Keystore funciona. */
 @RunWith(AndroidJUnit4::class)
 class SmokeTest {
-    @get:Rule
+    // Concede las notificaciones de antemano: si no, el diálogo del sistema tapa la bienvenida.
+    @get:Rule(order = 0)
+    val notifications: GrantPermissionRule =
+        if (android.os.Build.VERSION.SDK_INT >= 33) GrantPermissionRule.grant(android.Manifest.permission.POST_NOTIFICATIONS)
+        else GrantPermissionRule.grant()
+
+    @get:Rule(order = 1)
     val compose = createAndroidComposeRule<MainActivity>()
 
     @Test
